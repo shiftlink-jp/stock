@@ -1,0 +1,17 @@
+{
+  "name": "在庫管理 — ストック通知",
+  "short_name": "在庫管理",
+  "description": "店舗の在庫をケース／個数で管理し、在庫切れ・補充依頼をスマホ／PCへ通知します。",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#F4F7FB",
+  "theme_color": "#2A5DA8",
+  "icons": [
+    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
+    { "src": "./apple-touch-icon.png", "sizes": "180x180", "type": "image/png", "purpose": "any" }
+  ]
+}

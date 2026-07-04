@@ -1,0 +1,1462 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>在庫管理 — ストック通知</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="theme-color" content="#2A5DA8">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="在庫管理">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<link rel="icon" href="./icon-192.png">
+<style>
+  :root{
+    --bg:#F4F7FB; --surface:#FFFFFF; --surface-sunk:#EDF1F8;
+    --ink:#181B21; --ink-sub:#636A76; --ink-faint:#98A1AE;
+    --line:#E3E8F1; --line-strong:#D2D9E6;
+    --accent:#2A5DA8; --accent-ink:#FFFFFF; --accent-soft:#E7EEF8;
+    --accent-mat:#3E5C76; --accent-mat-soft:#E7EDF3;
+    --ok:#2F6B4F; --ok-soft:#E7F0EA;
+    --warn:#A9760F; --warn-soft:#F7EFD6;
+    --danger:#BE4530; --danger-soft:#F9EAE5;
+    --r-lg:18px; --r-md:12px; --r-sm:8px; --r-pill:999px;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:"Noto Sans JP","Hiragino Sans","Yu Gothic UI",system-ui,sans-serif;
+    line-height:1.6; -webkit-font-smoothing:antialiased;
+  }
+  .num{font-family:"Inter","Noto Sans JP",sans-serif; font-variant-numeric:tabular-nums;}
+  .wrap{max-width:1180px; margin:0 auto; padding:32px 24px 72px;}
+
+  /* ===== ヘッダー ===== */
+  header{display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:22px;}
+  .titlegroup{display:flex; align-items:center; gap:12px;}
+  h1{font-size:24px; font-weight:700; margin:0; letter-spacing:.01em;}
+  .modebadge{
+    display:none; font-size:12px; font-weight:700; color:var(--accent-mat);
+    border:1px solid var(--accent-mat); border-radius:var(--r-pill); padding:5px 12px;
+  }
+  body[data-ws="material"] .modebadge{display:inline-block;}
+  .hactions{display:flex; align-items:center; gap:8px; margin-left:auto;}
+  .hbtn{
+    font:inherit; font-size:13px; font-weight:600; cursor:pointer;
+    background:var(--surface); border:1px solid var(--line); color:var(--ink-sub);
+    border-radius:var(--r-pill); padding:7px 14px; transition:border-color .15s,color .15s;
+  }
+  .hbtn:hover{border-color:var(--accent); color:var(--accent);}
+  .hbtn:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+  #notif-count{font-family:"Inter"; font-weight:700; color:var(--accent);}
+
+  /* ===== タブ + 検索 ===== */
+  .tabsrow{display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:18px;}
+  .pagetabs{
+    display:inline-flex; gap:4px; padding:4px;
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--r-md);
+  }
+  .pagetabs button{
+    font:inherit; font-size:15px; font-weight:700; cursor:pointer;
+    padding:9px 22px; border-radius:var(--r-sm); border:none;
+    background:transparent; color:var(--ink-sub); transition:background .15s,color .15s;
+  }
+  .pagetabs button:hover{color:var(--ink);}
+  .pagetabs button[aria-selected="true"]{background:var(--accent); color:var(--accent-ink);}
+  .pagetabs button:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+  .search-wrap{position:relative; width:280px; max-width:100%;}
+  .search-ico{
+    position:absolute; left:15px; top:50%; transform:translateY(-50%);
+    font-size:14px; color:var(--ink-faint); pointer-events:none;
+  }
+  #search{
+    font:inherit; font-size:14px; width:100%;
+    padding:11px 16px 11px 40px; border-radius:var(--r-md);
+    border:1px solid var(--line); background:var(--surface); color:var(--ink);
+  }
+  #search:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent);}
+  #search::placeholder{color:var(--ink-faint);}
+
+  /* ===== 並び替え ===== */
+  .sortbar{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:20px;}
+  .sortbar .lbl{font-size:12px; color:var(--ink-sub);}
+  .sortbar button{
+    font:inherit; font-size:13px; font-weight:600; cursor:pointer;
+    padding:7px 14px; border-radius:var(--r-pill);
+    border:1px solid var(--line); background:var(--surface); color:var(--ink-sub);
+    transition:background .15s,color .15s,border-color .15s;
+  }
+  .sortbar button:hover{border-color:var(--accent); color:var(--accent);}
+  .sortbar button[aria-pressed="true"]{background:var(--accent); border-color:var(--accent); color:var(--accent-ink);}
+  .sortbar button:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+
+  /* ===== グリッド / セクション ===== */
+  .grid{display:grid; grid-template-columns:1fr; gap:24px; align-items:start;}
+  @media(min-width:900px){ body[data-ws="item"] .grid{grid-template-columns:1fr 1fr;} }
+  body[data-ws="material"] #sec-piece{display:none;}
+
+  .seccard{background:var(--surface); border:1px solid var(--line); border-radius:var(--r-md); overflow:hidden;}
+  .seccard h2{
+    display:flex; align-items:center; gap:8px; margin:0;
+    padding:14px 18px; font-size:12px; font-weight:600; letter-spacing:.08em;
+    color:var(--ink-sub); border-bottom:1px solid var(--line);
+  }
+  .seccard h2 .n{
+    margin-left:auto; font-family:"Inter"; font-size:11px; font-weight:600;
+    background:var(--bg); border:1px solid var(--line); border-radius:var(--r-pill);
+    padding:1px 9px; color:var(--ink-sub);
+  }
+  body[data-ws="material"] .seccard{border-radius:var(--r-lg);}
+  body[data-ws="material"] .seccard h2{
+    font-size:16px; font-weight:700; color:var(--ink); letter-spacing:0; padding:16px 22px;
+  }
+  body[data-ws="material"] .seccard h2 .n{
+    background:var(--accent-mat-soft); border:none; color:var(--accent-mat);
+    font-size:13px; font-weight:700; padding:3px 11px;
+  }
+
+  ul.itemlist{
+    list-style:none; margin:0; padding:16px;
+    display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:16px;
+  }
+  body[data-ws="material"] ul.itemlist{display:block; padding:0;}
+  .itemlist .empty{
+    grid-column:1 / -1; color:var(--ink-sub); font-size:13px; text-align:center; padding:22px 18px;
+  }
+
+  /* ===== サムネイル(共通) ===== */
+  .thumb-wrap{
+    position:relative; flex:none; border-radius:var(--r-md); overflow:hidden;
+    cursor:pointer; display:flex; align-items:center; justify-content:center;
+  }
+  .thumb-wrap .emoji{line-height:1;}
+  .thumb-wrap .thumb{position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:none;}
+  .thumb-wrap:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+
+  /* ===== 商品カード(コンパクト) ===== */
+  li.pcard{
+    display:flex; flex-direction:column; gap:10px; list-style:none;
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--r-md); padding:14px;
+    transition:background .15s,border-color .15s;
+  }
+  .pcard .top{display:flex; align-items:center; gap:10px; min-width:0;}
+  .pcard .thumb-wrap{width:48px; height:48px;}
+  .pcard .thumb-wrap .emoji{font-size:22px;}
+  .pcard .namecol{display:flex; flex-direction:column; gap:3px; min-width:0;}
+  .pcard .name-b{font-size:14px; font-weight:600; cursor:pointer; overflow-wrap:anywhere;}
+  .pcard .name-b:hover{color:var(--accent);}
+  .pcard .mid{display:flex; flex-direction:column; gap:8px;}
+  .pcard .stepper{display:inline-flex; align-items:center; gap:6px;}
+  .pcard .stepper button{
+    font:inherit; font-size:15px; line-height:1; width:28px; height:28px;
+    border:1px solid var(--line); border-radius:var(--r-sm); background:var(--surface);
+    color:var(--ink); cursor:pointer;
+  }
+  .pcard .stepper button:hover{border-color:var(--accent); color:var(--accent);}
+  .pcard .count{display:flex; flex-direction:column; align-items:center; line-height:1.15; cursor:pointer; padding:0 4px; border-radius:6px;}
+  .pcard .count:hover{box-shadow:inset 0 0 0 1px var(--accent);}
+  .pcard .count .big{font-size:14px; font-weight:700;}
+  .pcard .count small{font-size:10px; font-weight:400; color:var(--ink-sub);}
+  .pcard .actions{display:flex; align-items:center; gap:8px;}
+  .pcard .lowbtn,.pcard .outbtn{flex:1;}
+
+  /* ===== 資材の行(ワイド) ===== */
+  li.mrow{
+    display:flex; align-items:center; gap:18px; list-style:none;
+    padding:20px 22px; border-bottom:1px solid var(--line);
+    transition:background .15s;
+  }
+  .mrow:last-of-type{border-bottom:none;}
+  .mrow .thumb-wrap{width:100px; height:100px;}
+  .mrow .thumb-wrap .emoji{font-size:44px;}
+  .mrow .info{flex:1; display:flex; flex-direction:column; gap:8px; min-width:0;}
+  .mrow .namerow{display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+  .mrow .name-b{font-size:18px; font-weight:600; cursor:pointer; overflow-wrap:anywhere;}
+  .mrow .name-b:hover{color:var(--accent);}
+  .mrow .controls{display:flex; align-items:center; gap:12px;}
+  .mrow .stepper{
+    display:inline-flex; align-items:center; gap:4px;
+    background:var(--surface); border:1px solid var(--line-strong); border-radius:var(--r-md); padding:4px;
+  }
+  .mrow .stepper button{
+    font:inherit; font-family:"Inter"; font-size:20px; line-height:1; width:34px; height:34px;
+    border:none; border-radius:var(--r-sm); background:var(--surface-sunk); color:var(--ink-sub); cursor:pointer;
+  }
+  .mrow .stepper button:hover{color:var(--accent);}
+  .mrow .count{display:flex; flex-direction:column; align-items:center; padding:0 8px; cursor:pointer; border-radius:6px; line-height:1.1;}
+  .mrow .count:hover{box-shadow:inset 0 0 0 1px var(--accent);}
+  .mrow .count .cline{display:flex; align-items:baseline; gap:3px;}
+  .mrow .count .cline .num{font-size:20px; font-weight:700;}
+  .mrow .count .cline i{font-style:normal; font-size:11px; font-weight:500; color:var(--ink-sub);}
+  .mrow .count small{font-size:11px; color:var(--ink-faint);}
+
+  /* ===== 数値のゼロ強調 ===== */
+  .count.zero{color:var(--danger);}
+  .count.zero .num{color:var(--danger);}
+  .count.zero small{color:var(--danger);}
+
+  /* ===== 名称バッジ / 補足テキスト ===== */
+  .unit-badge{
+    display:inline-block; font-size:10px; font-weight:500; color:var(--ink-sub);
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--r-sm);
+    padding:2px 6px; cursor:pointer; white-space:nowrap;
+  }
+  .mrow .unit-badge{font-size:11px; padding:3px 10px; border-color:var(--line-strong);}
+  .unit-badge:hover{color:var(--accent); border-color:var(--accent);}
+  input.unit-edit{
+    font:inherit; font-size:11px; font-weight:600; color:var(--ink);
+    background:var(--bg); border:1px solid var(--accent); border-radius:6px;
+    padding:2px 6px; width:170px;
+  }
+  .restock{font-size:11px; color:var(--ink-sub); cursor:pointer; border-bottom:1px dashed transparent;}
+  .mrow .restock{font-size:13px;}
+  .restock:hover{color:var(--accent); border-bottom-color:var(--accent);}
+  .restock:focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:2px;}
+  .thresh{font-size:10px; color:var(--ink-faint); cursor:pointer; border-bottom:1px dashed transparent;}
+  .mrow .thresh{font-size:11px;}
+  .thresh:hover{color:var(--warn); border-bottom-color:var(--warn);}
+  input.thresh-edit{
+    font:inherit; font-size:11px; color:var(--ink);
+    background:var(--bg); border:1px solid var(--warn); border-radius:6px; padding:2px 6px; width:150px;
+  }
+  input.rename{
+    font:inherit; font-size:15px; font-weight:600; color:var(--ink);
+    background:var(--bg); border:1px solid var(--accent); border-radius:6px; padding:2px 8px; width:100%;
+  }
+  input.count-edit{
+    font:inherit; font-family:"Inter"; font-size:16px; font-weight:700; text-align:center; color:var(--ink);
+    background:var(--bg); border:1px solid var(--accent); border-radius:6px; padding:2px 4px; width:60px;
+  }
+
+  /* ===== ステータスピル ===== */
+  .statuspill{
+    display:inline-flex; align-items:center; gap:7px; white-space:nowrap;
+    font-size:12px; font-weight:600; color:var(--ok);
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--r-pill); padding:5px 12px;
+  }
+  .statuspill .dot{width:8px; height:8px; border-radius:50%; background:var(--ok); flex:none;}
+  .statuspill.low{color:var(--warn);} .statuspill.low .dot{background:var(--warn);}
+  .statuspill.out{color:var(--danger);} .statuspill.out .dot{background:var(--danger);}
+
+  /* ===== 状態別の背景 ===== */
+  .pcard.low{background:var(--warn-soft); border-color:var(--warn); border-left:5px solid var(--warn);}
+  .pcard.out{background:var(--danger-soft); border-color:var(--danger); border-left:5px solid var(--danger);}
+  .mrow.low{background:var(--warn-soft); box-shadow:inset 5px 0 0 var(--warn);}
+  .mrow.out{background:var(--danger-soft); box-shadow:inset 5px 0 0 var(--danger);}
+
+  /* ===== 補充 / 在庫切れ / 削除ボタン ===== */
+  .lowbtn,.outbtn{
+    font:inherit; font-size:12px; font-weight:600; cursor:pointer;
+    border-radius:var(--r-sm); background:var(--surface); transition:background .15s,color .15s;
+  }
+  .pcard .lowbtn,.pcard .outbtn{padding:8px 0;}
+  .mrow .lowbtn,.mrow .outbtn{padding:8px 14px;}
+  .lowbtn{border:1px solid var(--warn); color:var(--warn);}
+  .lowbtn:hover{background:var(--warn); color:#fff;}
+  .mrow .lowbtn{border-color:var(--line-strong); color:var(--ink-sub);}
+  .mrow .lowbtn:hover{border-color:var(--warn); background:var(--warn); color:#fff;}
+  .outbtn{border:1px solid var(--danger); color:var(--danger);}
+  .outbtn:hover{background:var(--danger); color:#fff;}
+  .lowbtn:focus-visible,.outbtn:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+  .outbtn:disabled{background:var(--surface-sunk); border-color:transparent; color:var(--ink-sub); cursor:default;}
+  .lowbtn:disabled{opacity:.55; cursor:default;}
+  .trash{
+    font:inherit; font-size:14px; line-height:1; cursor:pointer;
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--r-sm); color:var(--ink-sub);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .pcard .trash{width:30px; height:30px;}
+  .mrow .trash{width:38px; height:38px; font-size:15px;}
+  .trash:hover{border-color:var(--danger); color:var(--danger);}
+  .trash:focus-visible{outline:2px solid var(--danger); outline-offset:2px;}
+
+  /* ===== 追加ボタン ===== */
+  .addrow{padding:12px 18px;}
+  button.addbtn{
+    font:inherit; font-size:13px; font-weight:600; width:100%; cursor:pointer;
+    padding:11px; border-radius:var(--r-sm); border:none;
+    background:var(--accent-soft); color:var(--accent); transition:filter .15s;
+  }
+  button.addbtn:hover{filter:brightness(.96);}
+  button.addbtn:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+
+  /* ===== オーバーレイ(カレンダー / 通知) ===== */
+  #cal-overlay,#notif-overlay{
+    position:fixed; inset:0; z-index:50; display:none;
+    align-items:center; justify-content:center; background:rgba(20,28,42,.42); padding:20px;
+  }
+  #cal-overlay.show,#notif-overlay.show{display:flex;}
+  .cal{
+    width:340px; max-width:100%; background:var(--surface);
+    border:1px solid var(--line); border-radius:var(--r-lg); overflow:hidden;
+    box-shadow:0 24px 60px rgba(26,30,25,.28);
+  }
+  .cal-head{display:flex; align-items:center; gap:8px; padding:16px 18px 8px;}
+  .cal-title{font-size:15px; font-weight:700;}
+  .cal-title small{display:block; font-weight:400; color:var(--ink-faint); font-size:12px;}
+  .cal-nav{margin-left:auto; display:flex; gap:6px;}
+  .cal-nav button,.cal-close{
+    font:inherit; font-size:15px; line-height:1; width:32px; height:32px;
+    border-radius:var(--r-sm); border:1px solid var(--line); background:var(--surface); color:var(--ink); cursor:pointer;
+  }
+  .cal-nav button:hover,.cal-close:hover{border-color:var(--accent); color:var(--accent);}
+  .cal-month{padding:2px 18px 6px; font-size:14px; font-weight:700; text-align:center;}
+  .cal-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:3px; padding:6px 16px 14px;}
+  .cal-grid .wd{text-align:center; font-size:10px; color:var(--ink-sub); padding:2px 0;}
+  .cal-grid .wd.sun{color:var(--danger);}
+  .cal-grid .wd.sat{color:var(--accent);}
+  .cal-day{
+    aspect-ratio:1; border:1px solid transparent; border-radius:var(--r-sm);
+    font:inherit; font-family:"Inter"; font-size:12px;
+    background:var(--surface); color:var(--ink); cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .cal-day:hover{border-color:var(--accent);}
+  .cal-day.empty{cursor:default; background:transparent;}
+  .cal-day.past{color:var(--ink-faint); opacity:.45; cursor:not-allowed; background:transparent;}
+  .cal-day.today{box-shadow:inset 0 0 0 1px var(--accent);}
+  .cal-day.sel{background:var(--accent); color:var(--accent-ink); font-weight:700; border-color:var(--accent);}
+  .cal-day:focus-visible{outline:2px solid var(--accent); outline-offset:1px;}
+  .cal-foot{display:flex; align-items:center; gap:8px; padding:0 18px 16px; font-size:11px; color:var(--ink-faint);}
+  .cal-foot .cal-close{width:auto; height:auto; padding:7px 16px; margin-left:auto; font-size:13px; font-weight:600;}
+
+  /* ===== 通知パネル ===== */
+  .notif-status{font-size:13px; padding:9px 12px; border-radius:var(--r-sm); background:var(--bg); border:1px solid var(--line);}
+  .notif-status.ok{background:var(--ok-soft); color:var(--ok); border-color:var(--ok);}
+  .notif-status.no{background:var(--warn-soft); color:var(--warn); border-color:var(--warn);}
+  .notif-status.block{background:var(--danger-soft); color:var(--danger); border-color:var(--danger);}
+  .notif-sec{padding:10px 16px 4px; font-size:11px; font-weight:600; letter-spacing:.05em; color:var(--ink-sub);}
+  .notif-list{list-style:none; margin:0; padding:0 16px; max-height:180px; overflow-y:auto;}
+  .notif-list li{display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px dashed var(--line); font-size:13px;}
+  .notif-list li:last-child{border-bottom:none;}
+  .notif-list .dev-name{flex:1; overflow-wrap:anywhere;}
+  .notif-list .dev-here{font-size:10px; font-weight:600; color:var(--accent); background:var(--accent-soft); border-radius:4px; padding:1px 6px;}
+  .notif-list .empty2{color:var(--ink-sub); font-size:12px; padding:8px 0;}
+  .notif-add{display:flex; gap:6px; padding:10px 16px 4px;}
+  .notif-add input{
+    font:inherit; font-size:13px; flex:1; min-width:0;
+    padding:8px 10px; border-radius:var(--r-sm); border:1px solid var(--line); background:var(--bg); color:var(--ink);
+  }
+  .notif-add input:focus{outline:none; border-color:var(--accent);}
+  .notif-add button{
+    font:inherit; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap;
+    padding:8px 12px; border-radius:var(--r-sm); border:1px solid var(--accent); background:transparent; color:var(--accent);
+  }
+  .notif-add button:hover{background:var(--accent); color:var(--accent-ink);}
+  .notif-note{padding:8px 16px 4px; margin:0; font-size:11px; line-height:1.5; color:var(--ink-faint);}
+  .notif-dialog{max-height:88vh; display:flex; flex-direction:column;}
+  .notif-body{overflow-y:auto; flex:1 1 auto; min-height:0;}
+  .notif-block{padding:2px 16px 10px;}
+  .notif-help{margin:0 0 8px; font-size:11.5px; line-height:1.55; color:var(--ink-sub);}
+  .notif-help a{color:var(--accent); font-weight:600;}
+  .notif-field-label{display:block; font-size:11px; color:var(--ink-sub); margin:4px 0;}
+  .notif-sub{margin-top:8px; font-size:12px; color:var(--ink-sub); word-break:break-all;}
+  .notif-sub a{color:var(--accent); font-weight:600;}
+  .notif-btnrow{display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;}
+  .notif-ghost{
+    font:inherit; font-size:12px; font-weight:600; cursor:pointer;
+    padding:8px 12px; border-radius:var(--r-sm); border:1px solid var(--line);
+    background:var(--surface); color:var(--ink-sub);
+  }
+  .notif-ghost:hover{border-color:var(--accent); color:var(--accent);}
+  .notif-relay-line{
+    display:flex; align-items:center; gap:8px; margin-top:10px;
+    font-size:12px; color:var(--ink-sub); cursor:pointer;
+  }
+  .notif-relay-line input{width:16px; height:16px; accent-color:var(--accent);}
+
+  /* ===== トースト ===== */
+  #toast{
+    position:fixed; left:50%; bottom:28px; transform:translate(-50%,20px);
+    display:flex; align-items:center; gap:9px;
+    background:var(--accent); color:var(--accent-ink);
+    padding:11px 20px; border-radius:var(--r-pill); font-size:13px; font-weight:600;
+    box-shadow:0 12px 32px rgba(42,93,168,.32);
+    opacity:0; pointer-events:none; transition:opacity .25s,transform .25s; max-width:90vw; text-align:left;
+  }
+  #toast.show{opacity:1; transform:translate(-50%,0); pointer-events:auto;}
+  #toast .tcheck{
+    flex:none; width:18px; height:18px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    background:rgba(255,255,255,.22); font-size:11px;
+  }
+  #toast button{
+    font:inherit; font-size:12px; font-weight:700; cursor:pointer;
+    margin-left:6px; padding:3px 12px; border-radius:var(--r-pill);
+    border:1px solid var(--accent-ink); background:transparent; color:var(--accent-ink);
+  }
+  #toast button:hover{background:var(--accent-ink); color:var(--accent);}
+  @media (prefers-reduced-motion: reduce){ #toast{transition:none;} }
+
+  /* ===== レスポンシブ ===== */
+  @media(max-width:640px){
+    .wrap{padding:20px 16px 56px;}
+    h1{font-size:20px;}
+    .tabsrow{flex-direction:column; align-items:stretch;}
+    .search-wrap{width:100%;}
+    .pagetabs{width:100%;}
+    .pagetabs button{flex:1;}
+    .mrow{flex-wrap:wrap; gap:12px; padding:16px;}
+    .mrow .thumb-wrap{width:64px; height:64px;}
+    .mrow .thumb-wrap .emoji{font-size:28px;}
+    .mrow .info{flex-basis:calc(100% - 76px);}
+    .mrow .controls{flex-basis:100%; flex-wrap:wrap; justify-content:flex-start;}
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div class="titlegroup">
+      <h1>在庫管理</h1>
+      <span class="modebadge">資材モード</span>
+    </div>
+    <div class="hactions">
+      <button id="install-btn" class="hbtn" title="ホーム画面にアプリとして追加" style="display:none">📲 アプリを追加</button>
+      <button id="notif-btn" class="hbtn" title="通知の許可・端末登録">🔔 通知 <span id="notif-count"></span></button>
+      <button id="reset" class="hbtn" title="入力内容を消して初期状態に戻す">初期化</button>
+    </div>
+  </header>
+
+  <div class="tabsrow">
+    <div class="pagetabs" role="tablist" aria-label="管理対象の切り替え">
+      <button data-ws="item" role="tab" aria-selected="true">🛒 商品</button>
+      <button data-ws="material" role="tab" aria-selected="false">📦 資材</button>
+    </div>
+    <div class="search-wrap">
+      <span class="search-ico" aria-hidden="true">🔍</span>
+      <input id="search" type="search" placeholder="商品名で検索" aria-label="名前で検索" autocomplete="off">
+    </div>
+  </div>
+
+  <div class="sortbar" role="group" aria-label="並び替え">
+    <span class="lbl">並び替え:</span>
+    <button data-sort="name" aria-pressed="true">商品名順</button>
+    <button data-sort="stock-desc" aria-pressed="false">在庫が多い順</button>
+    <button data-sort="stock-asc" aria-pressed="false">在庫が少ない順</button>
+  </div>
+
+  <div class="grid">
+    <section class="seccard">
+      <h2>📦 ケース単位で管理 <span class="n" id="n-case">0</span></h2>
+      <ul id="list-case" class="itemlist"></ul>
+      <div class="addrow"><button class="addbtn" data-unit="case">＋ ケースで追加</button></div>
+    </section>
+
+    <section class="seccard" id="sec-piece">
+      <h2>🔢 個数で管理 <span class="n" id="n-piece">0</span></h2>
+      <ul id="list-piece" class="itemlist"></ul>
+      <div class="addrow"><button class="addbtn" data-unit="piece">＋ 個数で追加</button></div>
+    </section>
+  </div>
+</div>
+
+<div id="notif-overlay" role="dialog" aria-modal="true" aria-label="通知設定">
+  <div class="cal notif-dialog" style="width:400px">
+    <div class="cal-head">
+      <div class="cal-title">通知設定<small>在庫切れ・在庫不足をスマホ/PCへ</small></div>
+      <div class="cal-nav"><button class="cal-close" id="notif-x" aria-label="閉じる" style="width:32px; height:32px; padding:0">✕</button></div>
+    </div>
+
+    <div class="notif-body">
+      <div class="notif-sec">📡 スマホ・PCへの配信</div>
+      <div class="notif-block">
+        <p class="notif-help">スタッフの端末に無料アプリ「ntfy」を入れて、下の<b>配信チャンネル名</b>を購読すると、在庫切れ・補充依頼のプッシュ通知が届きます。サーバー不要で複数端末に配信できます。（<a href="https://ntfy.sh/" target="_blank" rel="noopener">ntfyについて</a>）</p>
+        <label class="notif-field-label" for="notif-topic">配信チャンネル名（推測されにくい名前にしてください）</label>
+        <div class="notif-add">
+          <input id="notif-topic" placeholder="例: oheart-stock-x9k2" aria-label="配信チャンネル名" autocomplete="off">
+          <button id="notif-topic-save">保存</button>
+        </div>
+        <div id="notif-sub" class="notif-sub"></div>
+        <label class="notif-relay-line"><input type="checkbox" id="notif-relay"> スマホ/PCへの配信を有効にする</label>
+        <div class="notif-btnrow">
+          <button id="notif-test" class="notif-ghost">🔔 テスト通知を送信</button>
+          <button id="notif-copy" class="notif-ghost">🔗 購読リンクをコピー</button>
+        </div>
+        <div id="notif-relay-status" class="notif-status" style="margin-top:10px"></div>
+      </div>
+
+      <div class="notif-sec">💻 この端末のブラウザ通知</div>
+      <div class="notif-block">
+        <div id="notif-status" class="notif-status"></div>
+        <button id="notif-perm" class="addbtn" style="margin-top:8px">この端末で通知を許可する</button>
+      </div>
+
+      <div class="notif-sec">登録端末・担当者（配信先メモ）</div>
+      <ul id="notif-list" class="notif-list"></ul>
+      <div class="notif-add">
+        <input id="notif-name" placeholder="端末名(例: レジ前タブレット)" aria-label="端末名">
+        <button id="notif-register">＋ この端末を登録</button>
+      </div>
+      <p class="notif-note">「登録端末」は配信先を把握するためのメモです。実際の通知は、上の配信チャンネルを購読している端末すべてに届きます。</p>
+    </div>
+
+    <div class="cal-foot"><button class="cal-close" id="notif-close">閉じる</button></div>
+  </div>
+</div>
+
+<div id="cal-overlay" role="dialog" aria-modal="true" aria-label="入荷日を設定">
+  <div class="cal">
+    <div class="cal-head">
+      <div class="cal-title">入荷日を設定<small id="cal-prod"></small></div>
+      <div class="cal-nav">
+        <button id="cal-prev" aria-label="前の月">‹</button>
+        <button id="cal-next" aria-label="次の月">›</button>
+      </div>
+    </div>
+    <div class="cal-month" id="cal-month"></div>
+    <div class="cal-grid" id="cal-grid"></div>
+    <div class="cal-foot">
+      <span>日付をタップで追加/解除</span>
+      <button class="cal-close" id="cal-close">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" role="status"></div>
+
+<script>
+  // unit: "case" = ケース単位で管理(caseSize = 1ケースの入数) / "piece" = 個数で管理
+  const PALETTE = [
+    { c1:"#BCD8E8", c2:"#8DB6CF" }, { c1:"#F2D8A7", c2:"#DFB46F" },
+    { c1:"#D5E3D0", c2:"#A9C4A0" }, { c1:"#E6D4E0", c2:"#C2A3B8" },
+    { c1:"#DCC6B4", c2:"#B39072" }, { c1:"#CFD9E6", c2:"#9FB0C8" },
+  ];
+  let seq = 0;
+
+  function mk(o) {
+    const pal = PALETTE[seq % PALETTE.length];
+    // threshold = 在庫不足ライン(この個数/ケース数を下回ると在庫不足)
+    return Object.assign({ id: ++seq, stock:0, threshold:2, restockDates:[], notified:false, lowNotified:false, emoji:"📦", c1:pal.c1, c2:pal.c2 }, o);
+  }
+
+  // restockDates = 入荷予定日の一覧(ISO文字列の配列)。表示は今日以降で最も近い日。
+  const DEFAULTS = {
+    item: () => [
+      mk({ name:"商品1", stock:5, unit:"case", caseSize:24, threshold:2, restockDates:["2026-07-08","2026-07-22"], emoji:"🥤" }),
+      mk({ name:"商品2", stock:3, unit:"case", caseSize:12, threshold:2, restockDates:["2026-07-10"], emoji:"🍞" }),
+      mk({ name:"商品3", stock:2, unit:"case", caseSize:48, threshold:1, restockDates:[], emoji:"🧴" }),
+      mk({ name:"商品4", stock:20, unit:"piece", threshold:8, restockDates:["2026-07-15","2026-07-29"], emoji:"🍫" }),
+      mk({ name:"商品5", stock:8, unit:"piece", threshold:5, restockDates:[], emoji:"🧺" }),
+    ],
+    material: () => [
+      mk({ name:"段ボール(中)", stock:6, unit:"case", caseSize:50, threshold:2, restockDates:["2026-07-09"], emoji:"📦" }),
+      mk({ name:"宅配袋(A4)", stock:4, unit:"case", caseSize:100, threshold:1, restockDates:[], emoji:"🛍️" }),
+      mk({ name:"商品ラベル", stock:12, unit:"case", caseSize:500, threshold:2, restockDates:["2026-07-12"], emoji:"🏷️" }),
+      mk({ name:"封筒(長3)", stock:30, unit:"case", caseSize:100, threshold:3, restockDates:[], emoji:"✉️" }),
+      mk({ name:"緩衝材(プチプチ)", stock:2, unit:"case", caseSize:1, threshold:1, restockDates:[], emoji:"🫧" }),
+    ],
+  };
+
+  // 保存が読めない/項目が欠けている場合の補完
+  function migrate(list) {
+    list.forEach(p => {
+      if (typeof p.threshold !== "number") p.threshold = p.unit === "case" ? 2 : 5;
+      if (typeof p.lowNotified !== "boolean") p.lowNotified = false;
+      if (!Array.isArray(p.restockDates)) {
+        p.restockDates = (typeof p.restockDate === "string" && p.restockDate) ? [p.restockDate] : [];
+      }
+      delete p.restockDate;
+    });
+    return list;
+  }
+
+  // 商品と資材を別々に保存する
+  const STORAGE_KEY = "shop-inventory-v2";
+  const store = { item: null, material: null };
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    if (saved && (saved.item || saved.material)) {
+      ["item", "material"].forEach(k => {
+        if (saved[k] && Array.isArray(saved[k].products)) {
+          store[k] = { products: migrate(saved[k].products), seq: saved[k].seq || 0 };
+        }
+      });
+    } else {
+      const v1 = JSON.parse(localStorage.getItem("shop-inventory-v1"));
+      if (v1 && Array.isArray(v1.products)) {
+        store.item = { products: migrate(v1.products), seq: v1.seq || 0 };
+      }
+    }
+  } catch (e) { /* 読めない場合は初期データを使う */ }
+
+  let current = "item";
+  let products;
+
+  function loadWorkspace(key) {
+    if (!store[key]) {
+      seq = 0;
+      const list = DEFAULTS[key]();
+      store[key] = { products: list, seq };
+    }
+    if (key === "material") {
+      store[key].products.forEach(p => {
+        if (p.unit !== "case") { p.unit = "case"; p.caseSize = p.caseSize || 1; }
+      });
+    }
+    products = store[key].products;
+    seq = store[key].seq;
+    current = key;
+    document.body.dataset.ws = key;
+    const s = document.getElementById("search");
+    if (s) s.placeholder = key === "material" ? "資材名で検索" : "商品名で検索";
+  }
+
+  function save() {
+    store[current] = { products, seq };
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(store)); } catch (e) {}
+  }
+
+  loadWorkspace(current);
+
+  function badgeLabel(p) {
+    return p.unit === "case" ? `1ケース ${p.caseSize}個入り` : "個数管理";
+  }
+
+  const WD = ["日", "月", "火", "水", "木", "金", "土"];
+  function pad2(n){ return String(n).padStart(2, "0"); }
+  function toISO(y, m, d){ return `${y}-${pad2(m)}-${pad2(d)}`; }
+  function todayISO(){
+    const t = new Date();
+    return toISO(t.getFullYear(), t.getMonth() + 1, t.getDate());
+  }
+  function soonestRestock(p){
+    const t = todayISO();
+    const future = (p.restockDates || []).filter(d => d >= t).sort();
+    return future[0] || null;
+  }
+  function restockLabel(p){
+    const iso = soonestRestock(p);
+    if (!iso) return "次回入荷日: 未定";
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+    const d = new Date(+m[1], +m[2] - 1, +m[3]);
+    return `次回入荷日: ${+m[2]}/${+m[3]}(${WD[d.getDay()]})`;
+  }
+
+  const cols = {
+    case:  { list: document.getElementById("list-case"),  count: document.getElementById("n-case") },
+    piece: { list: document.getElementById("list-piece"), count: document.getElementById("n-piece") },
+  };
+  const toast = document.getElementById("toast");
+  let toastTimer;
+
+  document.querySelectorAll(".addbtn").forEach(btn =>
+    btn.addEventListener("click", () => addProduct(btn.dataset.unit)));
+
+  const pageTabs = document.querySelectorAll(".pagetabs button");
+  pageTabs.forEach(btn => btn.addEventListener("click", () => {
+    if (btn.dataset.ws === current) return;
+    save();
+    loadWorkspace(btn.dataset.ws);
+    pageTabs.forEach(b => b.setAttribute("aria-selected", String(b === btn)));
+    renderList();
+  }));
+
+  document.getElementById("reset").addEventListener("click", () => {
+    const backup = JSON.parse(JSON.stringify(products));
+    const backupSeq = seq;
+    seq = 0;
+    products = DEFAULTS[current]();
+    save();
+    renderList();
+    notify("初期状態に戻しました", {
+      label: "元に戻す",
+      action: () => { products = backup; seq = backupSeq; save(); renderList(); },
+    });
+  });
+
+  let sortMode = "name";
+  const sortButtons = document.querySelectorAll(".sortbar button");
+  sortButtons.forEach(btn => btn.addEventListener("click", () => {
+    sortMode = btn.dataset.sort;
+    sortButtons.forEach(b => b.setAttribute("aria-pressed", String(b === btn)));
+    renderList();
+  }));
+
+  let query = "";
+  const searchInput = document.getElementById("search");
+  searchInput.addEventListener("input", () => {
+    query = searchInput.value.trim().toLowerCase();
+    renderList();
+  });
+
+  function sortedProducts(unit) {
+    let items = products.filter(p => p.unit === unit);
+    if (query) items = items.filter(p => p.name.toLowerCase().includes(query));
+    if (sortMode === "name") {
+      items.sort((a, b) => a.name.localeCompare(b.name, "ja"));
+    } else if (sortMode === "stock-desc") {
+      items.sort((a, b) => b.stock - a.stock || a.name.localeCompare(b.name, "ja"));
+    } else if (sortMode === "stock-asc") {
+      items.sort((a, b) => a.stock - b.stock || a.name.localeCompare(b.name, "ja"));
+    }
+    return items;
+  }
+
+  renderList();
+
+  function renderList() {
+    Object.entries(cols).forEach(([unit, col]) => {
+      col.list.textContent = "";
+      sortedProducts(unit).forEach(p => col.list.appendChild(buildItemAuto(p)));
+      refreshColumn(unit);
+    });
+  }
+
+  function refreshColumn(unit) {
+    const col = cols[unit];
+    const items = col.list.querySelectorAll("li.item");
+    col.count.textContent = items.length;
+    const empty = col.list.querySelector("li.empty");
+    if (items.length === 0 && !empty) {
+      const li = document.createElement("li");
+      li.className = "empty";
+      const kind = current === "material" ? "資材" : "商品";
+      li.textContent = query ? `「${searchInput.value.trim()}」に一致する${kind}はありません。`
+                             : `${kind}がありません。下のボタンから追加してください。`;
+      col.list.appendChild(li);
+    } else if (items.length > 0 && empty) {
+      empty.remove();
+    }
+  }
+
+  // 商品モード=コンパクトカード / 資材モード=ワイド行
+  function buildItemAuto(p) {
+    return current === "material" ? buildRow(p) : buildCard(p);
+  }
+
+  function buildCard(p) {
+    const isCase = p.unit === "case";
+    const unitName = isCase ? "ケース" : "個";
+    const li = document.createElement("li");
+    li.className = "item pcard";
+    li.innerHTML = `
+      <div class="top">
+        <span class="thumb-wrap" role="button" tabindex="0" title="タップで写真を変更" aria-label="${p.name}の写真を変更">
+          <span class="emoji"></span><img class="thumb" alt="">
+        </span>
+        <div class="namecol">
+          <b class="name-b" title="クリックで名前を変更"></b>
+          <span class="unit-badge" title="クリックで管理単位を変更"></span>
+        </div>
+      </div>
+      <span class="restock" role="button" tabindex="0" title="クリックで入荷日を設定"></span>
+      <span class="thresh" title="クリックで在庫不足ラインを変更"></span>
+      <div class="mid">
+        <span class="statuspill"><i class="dot"></i><span class="stxt">在庫あり</span></span>
+        <div class="stepper">
+          <button class="dec" aria-label="在庫を1${unitName}減らす">−</button>
+          <span class="count" role="button" tabindex="0"></span>
+          <button class="inc" aria-label="在庫を1${unitName}増やす">＋</button>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="lowbtn">補充</button>
+        <button class="outbtn">在庫切れ</button>
+        <button class="del trash" title="この商品を削除" aria-label="${p.name}を削除">🗑</button>
+      </div>`;
+    wire(p, li);
+    return li;
+  }
+
+  function buildRow(p) {
+    const isCase = p.unit === "case";
+    const unitName = isCase ? "ケース" : "個";
+    const li = document.createElement("li");
+    li.className = "item mrow";
+    li.innerHTML = `
+      <span class="thumb-wrap" role="button" tabindex="0" title="タップで写真を変更" aria-label="${p.name}の写真を変更">
+        <span class="emoji"></span><img class="thumb" alt="">
+      </span>
+      <div class="info">
+        <div class="namerow">
+          <b class="name-b" title="クリックで名前を変更"></b>
+          <span class="unit-badge" title="クリックで管理単位を変更"></span>
+        </div>
+        <span class="restock" role="button" tabindex="0" title="クリックで入荷日を設定"></span>
+        <span class="thresh" title="クリックで在庫不足ラインを変更"></span>
+      </div>
+      <div class="controls">
+        <div class="stepper">
+          <button class="dec" aria-label="在庫を1${unitName}減らす">−</button>
+          <span class="count" role="button" tabindex="0"></span>
+          <button class="inc" aria-label="在庫を1${unitName}増やす">＋</button>
+        </div>
+        <span class="statuspill"><i class="dot"></i><span class="stxt">在庫あり</span></span>
+        <button class="lowbtn">補充</button>
+        <button class="outbtn">在庫切れ</button>
+        <button class="del trash" title="この資材を削除" aria-label="${p.name}を削除">🗑</button>
+      </div>`;
+    wire(p, li);
+    return li;
+  }
+
+  // 生成した item(カード/行)へ内容とイベントを結びつける(両レイアウト共通)
+  function wire(p, li) {
+    const tw = li.querySelector(".thumb-wrap");
+    const emojiEl = li.querySelector(".emoji");
+    const imgEl = li.querySelector(".thumb");
+    emojiEl.textContent = p.emoji || "📦";
+    tw.style.background = `linear-gradient(135deg, ${p.c1}, ${p.c2})`;
+    if (p.photo) { imgEl.src = p.photo; imgEl.style.display = "block"; emojiEl.style.display = "none"; }
+    tw.addEventListener("click", () => pickPhoto(p, li));
+    tw.addEventListener("keydown", e => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pickPhoto(p, li); }
+    });
+
+    const nameEl = li.querySelector(".name-b");
+    nameEl.textContent = p.name;
+    nameEl.addEventListener("click", () => editName(p, li));
+
+    const restockEl = li.querySelector(".restock");
+    restockEl.textContent = restockLabel(p);
+    restockEl.addEventListener("click", () => openCalendar(p, li));
+    restockEl.addEventListener("keydown", e => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openCalendar(p, li); }
+    });
+
+    const badgeEl = li.querySelector(".unit-badge");
+    badgeEl.textContent = badgeLabel(p);
+    badgeEl.addEventListener("click", () => editUnit(p, li));
+
+    li.querySelector(".thresh").addEventListener("click", () => editThreshold(p, li));
+    li.querySelector(".inc").addEventListener("click", () => setStock(p, li, p.stock + 1));
+    li.querySelector(".dec").addEventListener("click", () => setStock(p, li, p.stock - 1));
+
+    const countEl = li.querySelector(".count");
+    countEl.title = "クリックで在庫数を直接入力";
+    countEl.addEventListener("click", () => editCount(p, li));
+    countEl.addEventListener("keydown", e => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); editCount(p, li); }
+    });
+
+    li.querySelector(".lowbtn").addEventListener("click", () => reportLow(p, li));
+    const outbtn = li.querySelector(".outbtn");
+    outbtn.addEventListener("click", () => reportOut(p, li));
+    if (p.notified) { outbtn.disabled = true; outbtn.textContent = "通知済み"; }
+    li.querySelector(".del").addEventListener("click", () => deleteProduct(p, li));
+
+    renderStock(p, li);
+  }
+
+  function stockState(p) {
+    if (p.stock === 0) return "out";
+    if (p.stock <= p.threshold) return "low";
+    return "ok";
+  }
+
+  function renderStock(p, li) {
+    const isCase = p.unit === "case";
+    const unitName = isCase ? "ケース" : "個";
+    const count = li.querySelector(".count");
+    if (li.classList.contains("mrow")) {
+      if (isCase) {
+        count.innerHTML = `<span class="cline"><span class="num">${p.stock}</span><i>ケース</i></span><small>計 ${p.stock * p.caseSize}個</small>`;
+      } else {
+        count.innerHTML = `<span class="cline"><span class="num">${p.stock}</span><i>個</i></span>`;
+      }
+    } else {
+      if (isCase) {
+        count.innerHTML = `<span class="big"><span class="num">${p.stock}</span>ケース</span><small>計${p.stock * p.caseSize}個</small>`;
+      } else {
+        count.innerHTML = `<span class="big"><span class="num">${p.stock}</span>個</span>`;
+      }
+    }
+    const state = stockState(p);
+    count.classList.toggle("zero", state === "out");
+
+    const pill = li.querySelector(".statuspill");
+    pill.classList.toggle("low", state === "low");
+    pill.classList.toggle("out", state === "out");
+    pill.querySelector(".stxt").textContent = state === "out" ? "在庫切れ" : state === "low" ? "在庫不足" : "在庫あり";
+
+    li.classList.toggle("out", state === "out");
+    li.classList.toggle("low", state === "low");
+
+    li.querySelector(".thresh").textContent = `在庫不足ライン: ${p.threshold}${unitName}以下`;
+
+    const lowbtn = li.querySelector(".lowbtn");
+    lowbtn.disabled = false;
+    lowbtn.textContent = p.lowNotified ? "補充依頼済み" : "補充";
+  }
+
+  function setStock(p, li, value) {
+    p.stock = Math.max(0, value);
+    if (p.stock > 0) {
+      p.notified = false;
+      const btn = li.querySelector(".outbtn");
+      btn.disabled = false;
+      btn.textContent = "在庫切れ";
+    }
+    if (p.stock > p.threshold) p.lowNotified = false;
+    renderStock(p, li);
+    save();
+  }
+
+  function editCount(p, li) {
+    const count = li.querySelector(".count");
+    if (count.querySelector("input")) return;
+    const unitName = p.unit === "case" ? "ケース" : "個";
+    count.innerHTML = "";
+    const input = document.createElement("input");
+    input.className = "count-edit";
+    input.inputMode = "numeric";
+    input.value = p.stock;
+    input.setAttribute("aria-label", `在庫数(${unitName})を入力`);
+    count.appendChild(input);
+    input.focus();
+    input.select();
+    let done = false;
+    const commit = () => {
+      if (done) return;
+      done = true;
+      const n = parseInt(input.value, 10);
+      if (Number.isFinite(n) && n >= 0) setStock(p, li, n);
+      else renderStock(p, li);
+    };
+    input.addEventListener("blur", commit);
+    input.addEventListener("keydown", e => {
+      if (e.key === "Enter") input.blur();
+      if (e.key === "Escape") { done = true; renderStock(p, li); }
+    });
+  }
+
+  function pickPhoto(p, li) {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.addEventListener("change", () => {
+      const file = input.files && input.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          const SIZE = 240;
+          const canvas = document.createElement("canvas");
+          canvas.width = SIZE; canvas.height = SIZE;
+          const ctx = canvas.getContext("2d");
+          const side = Math.min(img.width, img.height);
+          const sx = (img.width - side) / 2, sy = (img.height - side) / 2;
+          ctx.drawImage(img, sx, sy, side, side, 0, 0, SIZE, SIZE);
+          p.photo = canvas.toDataURL("image/jpeg", 0.8);
+          const imgEl = li.querySelector(".thumb");
+          const emojiEl = li.querySelector(".emoji");
+          if (imgEl) { imgEl.src = p.photo; imgEl.style.display = "block"; }
+          if (emojiEl) emojiEl.style.display = "none";
+          save();
+        };
+        img.onerror = () => alert("この画像を読み込めませんでした。別のファイルを選んでください。");
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+    input.click();
+  }
+
+  function addProduct(unit) {
+    const same = products.filter(p => p.unit === unit).length;
+    const kind = current === "material" ? "資材" : "商品";
+    const o = { name: `新しい${kind}${same + 1}`, stock: 0, unit };
+    if (unit === "case") o.caseSize = 24;
+    const p = mk(o);
+    products.push(p);
+    const li = buildItemAuto(p);
+    cols[unit].list.appendChild(li);
+    refreshColumn(unit);
+    save();
+    editName(p, li);
+  }
+
+  function deleteProduct(p, li) {
+    const i = products.indexOf(p);
+    if (i < 0) return;
+    products.splice(i, 1);
+    li.remove();
+    refreshColumn(p.unit);
+    save();
+    notify(`「${p.name}」を削除しました`, {
+      label: "元に戻す",
+      action: () => {
+        products.splice(Math.min(i, products.length), 0, p);
+        save();
+        renderList();
+      },
+    });
+  }
+
+  function editUnit(p, li) {
+    const badgeEl = li.querySelector(".unit-badge");
+    if (li.querySelector("input.unit-edit")) return;
+    const input = document.createElement("input");
+    input.className = "unit-edit";
+    input.value = p.unit === "case" ? p.caseSize : "";
+    input.placeholder = "1ケースの入数(個数管理は0)";
+    badgeEl.replaceWith(input);
+    input.focus();
+    input.select();
+
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      const oldUnit = p.unit;
+      const n = parseInt(input.value, 10);
+      if (Number.isFinite(n) && n > 1) {
+        p.unit = "case";
+        p.caseSize = n;
+      } else if (current === "material") {
+        p.unit = "case";
+        p.caseSize = Number.isFinite(n) && n >= 1 ? n : 1;
+      } else {
+        p.unit = "piece";
+        delete p.caseSize;
+      }
+      const fresh = buildItemAuto(p);
+      li.replaceWith(fresh);
+      if (p.unit !== oldUnit) {
+        cols[p.unit].list.appendChild(fresh);
+        refreshColumn(oldUnit);
+        refreshColumn(p.unit);
+      }
+      save();
+    };
+    input.addEventListener("blur", finish);
+    input.addEventListener("keydown", e => {
+      if (e.key === "Enter") input.blur();
+      if (e.key === "Escape") { done = true; li.replaceWith(buildItemAuto(p)); }
+    });
+  }
+
+  function editName(p, li) {
+    const nameEl = li.querySelector(".name-b");
+    if (li.querySelector("input.rename")) return;
+    const input = document.createElement("input");
+    input.className = "rename";
+    input.value = p.name;
+    nameEl.replaceWith(input);
+    input.focus();
+    input.select();
+
+    const commit = () => {
+      const v = input.value.trim();
+      if (v) p.name = v;
+      const b = document.createElement("b");
+      b.className = "name-b";
+      b.title = "クリックで名前を変更";
+      b.textContent = p.name;
+      b.addEventListener("click", () => editName(p, li));
+      input.replaceWith(b);
+      save();
+    };
+    input.addEventListener("blur", commit);
+    input.addEventListener("keydown", e => {
+      if (e.key === "Enter") input.blur();
+      if (e.key === "Escape") { input.value = p.name; input.blur(); }
+    });
+  }
+
+  function editThreshold(p, li) {
+    const el = li.querySelector(".thresh");
+    if (li.querySelector("input.thresh-edit")) return;
+    const unitName = p.unit === "case" ? "ケース" : "個";
+    const input = document.createElement("input");
+    input.className = "thresh-edit";
+    input.inputMode = "numeric";
+    input.value = p.threshold;
+    input.placeholder = `在庫不足ライン(${unitName})`;
+    el.replaceWith(input);
+    input.focus();
+    input.select();
+
+    const commit = () => {
+      const n = parseInt(input.value, 10);
+      if (Number.isFinite(n) && n >= 0) p.threshold = n;
+      const span = document.createElement("span");
+      span.className = "thresh";
+      span.title = "クリックで在庫不足ラインを変更";
+      span.addEventListener("click", () => editThreshold(p, li));
+      input.replaceWith(span);
+      renderStock(p, li);
+      save();
+    };
+    input.addEventListener("blur", commit);
+    input.addEventListener("keydown", e => {
+      if (e.key === "Enter") input.blur();
+      if (e.key === "Escape") { input.value = p.threshold; input.blur(); }
+    });
+  }
+
+  function notify(msg, opts) {
+    toast.textContent = "";
+    const check = document.createElement("span");
+    check.className = "tcheck";
+    check.textContent = "✓";
+    toast.appendChild(check);
+    const span = document.createElement("span");
+    span.textContent = msg;
+    toast.appendChild(span);
+    if (opts && opts.label && opts.action) {
+      const btn = document.createElement("button");
+      btn.textContent = opts.label;
+      btn.addEventListener("click", () => { opts.action(); toast.classList.remove("show"); });
+      toast.appendChild(btn);
+    }
+    toast.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove("show"), opts && opts.action ? 5000 : 2800);
+  }
+
+  function reportLow(p, li) {
+    p.lowNotified = true;
+    renderStock(p, li);
+    save();
+    const unitName = p.unit === "case" ? "ケース" : "個";
+    notify(`管理者に「${p.name}」の在庫不足(残り ${p.stock}${unitName})を通知しました。補充を依頼します。`);
+    pushNotify("在庫不足の補充依頼", `「${p.name}」が在庫不足です(残り ${p.stock}${unitName})。補充してください。`, { priority: 4, tags: ["warning", "package"] });
+  }
+
+  // ===== 入荷日カレンダー =====
+  const overlay = document.getElementById("cal-overlay");
+  const calGrid = document.getElementById("cal-grid");
+  const calMonth = document.getElementById("cal-month");
+  const calProd = document.getElementById("cal-prod");
+  let calTarget = null;
+  let calView = null;
+
+  function openCalendar(p, li) {
+    calTarget = { p, li };
+    const base = soonestRestock(p) || todayISO();
+    const [y, m] = base.split("-").map(Number);
+    calView = { y, m };
+    calProd.textContent = p.name;
+    renderCalendar();
+    overlay.classList.add("show");
+  }
+
+  function closeCalendar() {
+    overlay.classList.remove("show");
+    calTarget = null;
+  }
+
+  function renderCalendar() {
+    const { y, m } = calView;
+    calMonth.textContent = `${y}年 ${m}月`;
+    calGrid.textContent = "";
+    ["日","月","火","水","木","金","土"].forEach((w, i) => {
+      const el = document.createElement("div");
+      el.className = "wd" + (i === 0 ? " sun" : i === 6 ? " sat" : "");
+      el.textContent = w;
+      calGrid.appendChild(el);
+    });
+    const first = new Date(y, m - 1, 1).getDay();
+    const days = new Date(y, m, 0).getDate();
+    const today = todayISO();
+    const selected = calTarget.p.restockDates || [];
+    for (let i = 0; i < first; i++) {
+      const blank = document.createElement("div");
+      blank.className = "cal-day empty";
+      calGrid.appendChild(blank);
+    }
+    for (let d = 1; d <= days; d++) {
+      const iso = toISO(y, m, d);
+      const btn = document.createElement("button");
+      btn.className = "cal-day";
+      btn.textContent = d;
+      if (iso === today) btn.classList.add("today");
+      if (selected.includes(iso)) btn.classList.add("sel");
+      if (iso < today) {
+        btn.classList.add("past");
+        btn.disabled = true;
+      } else {
+        btn.addEventListener("click", () => toggleDate(iso));
+      }
+      calGrid.appendChild(btn);
+    }
+  }
+
+  function toggleDate(iso) {
+    const p = calTarget.p;
+    if (!Array.isArray(p.restockDates)) p.restockDates = [];
+    const i = p.restockDates.indexOf(iso);
+    if (i >= 0) p.restockDates.splice(i, 1);
+    else p.restockDates.push(iso);
+    p.restockDates.sort();
+    save();
+    renderCalendar();
+    const el = calTarget.li.querySelector(".restock");
+    if (el) el.textContent = restockLabel(p);
+  }
+
+  document.getElementById("cal-prev").addEventListener("click", () => {
+    calView.m--; if (calView.m < 1) { calView.m = 12; calView.y--; }
+    renderCalendar();
+  });
+  document.getElementById("cal-next").addEventListener("click", () => {
+    calView.m++; if (calView.m > 12) { calView.m = 1; calView.y++; }
+    renderCalendar();
+  });
+  document.getElementById("cal-close").addEventListener("click", closeCalendar);
+  overlay.addEventListener("click", e => { if (e.target === overlay) closeCalendar(); });
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && overlay.classList.contains("show")) closeCalendar();
+  });
+
+  function reportOut(p, li) {
+    const btn = li.querySelector(".outbtn");
+    setStock(p, li, 0);
+    p.notified = true;
+    btn.disabled = true;
+    btn.textContent = "通知済み";
+    save();
+    const unitInfo = p.unit === "case" ? `ケース管理・1ケース${p.caseSize}個入り` : "個数管理";
+    notify(`管理者に「${p.name}」の在庫切れを通知しました(${unitInfo})`);
+    pushNotify("在庫切れのお知らせ", `「${p.name}」が在庫切れになりました(${unitInfo})。`, { priority: 5, tags: ["rotating_light", "package"] });
+  }
+
+  // ===== 通知(ブラウザ通知 + 端末登録) =====
+  const NOTIF_KEY = "shop-inventory-notif";
+  const NTFY_BASE = "https://ntfy.sh";
+  let notifData = { devices: [], topic: "", relay: true };
+  try {
+    const s = JSON.parse(localStorage.getItem(NOTIF_KEY));
+    if (s && Array.isArray(s.devices)) notifData = Object.assign(notifData, s);
+  } catch (e) {}
+  // 配信チャンネル名が未設定なら、推測されにくいランダム名を初期生成する
+  if (!notifData.topic) {
+    notifData.topic = "oheart-stock-" + Math.random().toString(36).slice(2, 8);
+  }
+  if (typeof notifData.relay !== "boolean") notifData.relay = true;
+
+  function saveNotif() {
+    try { localStorage.setItem(NOTIF_KEY, JSON.stringify(notifData)); } catch (e) {}
+  }
+
+  const notifSupported = typeof Notification !== "undefined";
+
+  // 在庫切れ・在庫不足の通知を送る。
+  // 1) この端末のブラウザ通知  2) ntfy 経由で購読中の全端末(スマホ/PC)へプッシュ配信
+  function pushNotify(title, body, opts) {
+    opts = opts || {};
+    if (notifSupported && Notification.permission === "granted") {
+      try { new Notification(title, { body }); } catch (e) {}
+    }
+    if (notifData.relay && notifData.topic) {
+      // Content-Type を付けない文字列 body にすることで CORS プリフライトを避ける
+      try {
+        fetch(NTFY_BASE, {
+          method: "POST",
+          body: JSON.stringify({
+            topic: notifData.topic,
+            title: title,
+            message: body,
+            priority: opts.priority || 4,
+            tags: opts.tags || ["package"],
+          }),
+        }).catch(() => {});
+      } catch (e) { /* オフライン等は無視 */ }
+    }
+  }
+
+  const notifOverlay = document.getElementById("notif-overlay");
+  const notifBtn = document.getElementById("notif-btn");
+  const notifCountEl = document.getElementById("notif-count");
+  const notifStatus = document.getElementById("notif-status");
+  const notifPerm = document.getElementById("notif-perm");
+  const notifListEl = document.getElementById("notif-list");
+  const notifName = document.getElementById("notif-name");
+  const notifTopic = document.getElementById("notif-topic");
+  const notifTopicSave = document.getElementById("notif-topic-save");
+  const notifSub = document.getElementById("notif-sub");
+  const notifRelay = document.getElementById("notif-relay");
+  const notifTest = document.getElementById("notif-test");
+  const notifCopy = document.getElementById("notif-copy");
+  const notifRelayStatus = document.getElementById("notif-relay-status");
+
+  function subUrl() { return notifData.topic ? `${NTFY_BASE}/${notifData.topic}` : ""; }
+
+  // 配信チャンネルの購読リンクと状態を表示する
+  function renderRelay() {
+    notifTopic.value = notifData.topic;
+    notifRelay.checked = !!notifData.relay;
+    if (notifData.topic) {
+      const u = subUrl();
+      notifSub.innerHTML = `購読リンク: <a href="${u}" target="_blank" rel="noopener">${u.replace(/^https:\/\//, "")}</a>`;
+    } else {
+      notifSub.textContent = "配信チャンネル名を設定してください。";
+    }
+    let cls, msg;
+    if (!notifData.topic) { cls = "no"; msg = "配信チャンネルが未設定です。"; }
+    else if (!notifData.relay) { cls = "no"; msg = "配信は停止中です。有効にすると購読端末へ届きます。"; }
+    else { cls = "ok"; msg = "配信ON。このチャンネルを購読中のスマホ/PCすべてに届きます。"; }
+    notifRelayStatus.className = "notif-status " + cls;
+    notifRelayStatus.textContent = msg;
+  }
+
+  function saveTopic() {
+    // ntfyのチャンネル名に使える文字だけ残す
+    const v = notifTopic.value.trim().replace(/[^a-zA-Z0-9_-]/g, "");
+    if (!v) { notify("配信チャンネル名を入力してください"); notifTopic.value = notifData.topic; return; }
+    notifData.topic = v;
+    saveNotif();
+    renderRelay();
+    notify("配信チャンネルを保存しました");
+  }
+  notifTopicSave.addEventListener("click", saveTopic);
+  notifTopic.addEventListener("keydown", e => { if (e.key === "Enter") saveTopic(); });
+
+  notifRelay.addEventListener("change", () => {
+    notifData.relay = notifRelay.checked;
+    saveNotif();
+    renderRelay();
+  });
+
+  notifTest.addEventListener("click", () => {
+    if (!notifData.topic) { notify("先に配信チャンネル名を設定してください"); return; }
+    pushNotify("テスト通知", "在庫通知のテストです。この通知が届いていれば設定は完了です。", { priority: 3, tags: ["bell"] });
+    notify("テスト通知を送信しました");
+  });
+
+  notifCopy.addEventListener("click", async () => {
+    const u = subUrl();
+    if (!u) { notify("先に配信チャンネル名を設定してください"); return; }
+    try {
+      await navigator.clipboard.writeText(u);
+      notify("購読リンクをコピーしました");
+    } catch (e) {
+      notifTopic.value = u; notifTopic.select();
+      notify("コピーできない環境です。リンクを手動でコピーしてください");
+    }
+  });
+
+  function updateNotifCount() {
+    notifCountEl.textContent = notifData.devices.length ? `(${notifData.devices.length})` : "";
+  }
+
+  function renderNotifPanel() {
+    renderRelay();
+    let cls = "no", msg = "この端末では通知が許可されていません。";
+    if (!notifSupported) { cls = "block"; msg = "この環境ではブラウザ通知が利用できません(公開後の端末では利用可能です)。"; }
+    else if (Notification.permission === "granted") { cls = "ok"; msg = "この端末は通知が許可されています。"; }
+    else if (Notification.permission === "denied") { cls = "block"; msg = "通知がブロックされています。ブラウザの設定から許可してください。"; }
+    notifStatus.className = "notif-status " + cls;
+    notifStatus.textContent = msg;
+    notifPerm.disabled = !notifSupported || Notification.permission === "granted";
+    notifPerm.textContent = (notifSupported && Notification.permission === "granted") ? "通知は許可済みです" : "この端末で通知を許可する";
+
+    notifListEl.textContent = "";
+    if (!notifData.devices.length) {
+      const li = document.createElement("li");
+      li.className = "empty2";
+      li.textContent = "まだ端末が登録されていません。";
+      notifListEl.appendChild(li);
+    } else {
+      notifData.devices.forEach(d => {
+        const li = document.createElement("li");
+        const name = document.createElement("span");
+        name.className = "dev-name";
+        name.textContent = d.name;
+        li.appendChild(name);
+        if (d.id === thisDeviceId) {
+          const here = document.createElement("span");
+          here.className = "dev-here";
+          here.textContent = "この端末";
+          li.appendChild(here);
+        }
+        const del = document.createElement("button");
+        del.className = "trash";
+        del.style.width = "30px"; del.style.height = "30px";
+        del.textContent = "🗑";
+        del.title = "登録を削除";
+        del.addEventListener("click", () => {
+          notifData.devices = notifData.devices.filter(x => x.id !== d.id);
+          saveNotif(); updateNotifCount(); renderNotifPanel();
+        });
+        li.appendChild(del);
+        notifListEl.appendChild(li);
+      });
+    }
+    updateNotifCount();
+  }
+
+  let thisDeviceId = null;
+  try { thisDeviceId = localStorage.getItem("shop-device-id"); } catch (e) {}
+  if (!thisDeviceId) {
+    thisDeviceId = "dev-" + Math.random().toString(36).slice(2, 10);
+    try { localStorage.setItem("shop-device-id", thisDeviceId); } catch (e) {}
+  }
+
+  function openNotif() { renderNotifPanel(); notifOverlay.classList.add("show"); }
+  function closeNotif() { notifOverlay.classList.remove("show"); }
+
+  notifBtn.addEventListener("click", openNotif);
+  document.getElementById("notif-close").addEventListener("click", closeNotif);
+  document.getElementById("notif-x").addEventListener("click", closeNotif);
+  notifOverlay.addEventListener("click", e => { if (e.target === notifOverlay) closeNotif(); });
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && notifOverlay.classList.contains("show")) closeNotif();
+  });
+
+  notifPerm.addEventListener("click", async () => {
+    if (!notifSupported) return;
+    try { await Notification.requestPermission(); } catch (e) {}
+    renderNotifPanel();
+    if (Notification.permission === "granted") pushNotify("通知を有効にしました", "在庫切れ・在庫不足のお知らせがこの端末に届きます。");
+  });
+
+  function registerThisDevice() {
+    const existing = notifData.devices.find(d => d.id === thisDeviceId);
+    const name = notifName.value.trim() || (existing ? existing.name : `端末${notifData.devices.length + 1}`);
+    if (existing) existing.name = name;
+    else notifData.devices.push({ id: thisDeviceId, name, enabled: true });
+    notifName.value = "";
+    saveNotif();
+    renderNotifPanel();
+  }
+  document.getElementById("notif-register").addEventListener("click", registerThisDevice);
+  notifName.addEventListener("keydown", e => { if (e.key === "Enter") registerThisDevice(); });
+
+  updateNotifCount();
+</script>
+
+<script>
+  // ===== PWA: Service Worker 登録 + ホーム画面への追加 =====
+  // http/https で配信されたときだけ登録する(ローカルの file:// では動かない)
+  if ("serviceWorker" in navigator && location.protocol.indexOf("http") === 0) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("./sw.js").catch(() => {});
+    });
+  }
+
+  // Android / デスクトップChrome: インストール可能になったらボタンを表示
+  let deferredPrompt = null;
+  const installBtn = document.getElementById("install-btn");
+  window.addEventListener("beforeinstallprompt", e => {
+    e.preventDefault();
+    deferredPrompt = e;
+    if (installBtn) installBtn.style.display = "";
+  });
+  if (installBtn) {
+    installBtn.addEventListener("click", async () => {
+      if (!deferredPrompt) {
+        alert("iPhoneの場合は、Safariの共有メニューから「ホーム画面に追加」を選んでください。");
+        return;
+      }
+      deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+      deferredPrompt = null;
+      installBtn.style.display = "none";
+    });
+  }
+  window.addEventListener("appinstalled", () => {
+    if (installBtn) installBtn.style.display = "none";
+  });
+</script>
+</body>
+</html>
