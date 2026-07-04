@@ -286,11 +286,11 @@
   button.addbtn:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
 
   /* ===== オーバーレイ(カレンダー / 通知) ===== */
-  #cal-overlay,#notif-overlay{
+  #cal-overlay,#notif-overlay,#history-overlay{
     position:fixed; inset:0; z-index:50; display:none;
     align-items:center; justify-content:center; background:rgba(20,28,42,.42); padding:20px;
   }
-  #cal-overlay.show,#notif-overlay.show{display:flex;}
+  #cal-overlay.show,#notif-overlay.show,#history-overlay.show{display:flex;}
   .cal{
     width:340px; max-width:100%; background:var(--surface);
     border:1px solid var(--line); border-radius:var(--r-lg); overflow:hidden;
@@ -369,6 +369,17 @@
     font-size:12px; color:var(--ink-sub); cursor:pointer;
   }
   .notif-relay-line input{width:16px; height:16px; accent-color:var(--accent);}
+  .history-list{list-style:none; margin:0; padding:6px 16px 12px;}
+  .history-list li{padding:11px 0 11px 10px; border-bottom:1px dashed var(--line); border-left:3px solid transparent;}
+  .history-list li:last-child{border-bottom:none;}
+  .history-list li.out{border-left-color:var(--danger);}
+  .history-list li.low{border-left-color:var(--warn);}
+  .history-list .h-time{font-size:11px; color:var(--ink-faint); font-family:"Inter";}
+  .history-list .h-title{font-size:13px; font-weight:600; color:var(--ink); margin-top:2px;}
+  .history-list li.out .h-title{color:var(--danger);}
+  .history-list li.low .h-title{color:var(--warn);}
+  .history-list .h-body{font-size:12px; color:var(--ink-sub); margin-top:2px; overflow-wrap:anywhere;}
+  .history-list .h-empty{color:var(--ink-sub); font-size:13px; text-align:center; padding:24px 0;}
 
   /* ===== トースト ===== */
   #toast{
@@ -420,7 +431,7 @@
     <div class="hactions">
       <button id="install-btn" class="hbtn" title="ホーム画面にアプリとして追加" style="display:none">📲 アプリを追加</button>
       <button id="notif-btn" class="hbtn" title="通知の許可・端末登録">🔔 通知 <span id="notif-count"></span></button>
-      <button id="reset" class="hbtn" title="入力内容を消して初期状態に戻す">初期化</button>
+      <button id="history-btn" class="hbtn" title="過去の通知を見る">🕘 通知履歴</button>
     </div>
   </header>
 
@@ -514,6 +525,22 @@
     <div class="cal-foot">
       <span>日付をタップで追加/解除</span>
       <button class="cal-close" id="cal-close">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<div id="history-overlay" role="dialog" aria-modal="true" aria-label="通知履歴">
+  <div class="cal notif-dialog" style="width:420px">
+    <div class="cal-head">
+      <div class="cal-title">通知履歴<small>在庫切れ・補充依頼などの記録（全端末共通）</small></div>
+      <div class="cal-nav"><button class="cal-close" id="history-x" aria-label="閉じる" style="width:32px; height:32px; padding:0">✕</button></div>
+    </div>
+    <div class="notif-body">
+      <ul id="history-list" class="history-list"></ul>
+    </div>
+    <div class="cal-foot">
+      <button class="cal-close" id="history-clear" style="width:auto; height:auto; padding:7px 14px; font-size:13px; font-weight:600;">履歴を消去</button>
+      <button class="cal-close" id="history-close" style="margin-left:auto;">閉じる</button>
     </div>
   </div>
 </div>
@@ -657,17 +684,70 @@
     renderList();
   }));
 
-  document.getElementById("reset").addEventListener("click", () => {
-    const backup = JSON.parse(JSON.stringify(products));
-    const backupSeq = seq;
-    seq = 0;
-    products = DEFAULTS[current]();
-    save();
-    renderList();
-    notify("初期状態に戻しました", {
-      label: "元に戻す",
-      action: () => { products = backup; seq = backupSeq; save(); renderList(); },
+  // ===== 通知履歴（配達サーバーに記録された全端末共通の履歴を表示）=====
+  const historyOverlay = document.getElementById("history-overlay");
+  const historyListEl = document.getElementById("history-list");
+  const historyBtn = document.getElementById("history-btn");
+
+  function fmtHistTime(t) {
+    const d = new Date(t);
+    const p = n => String(n).padStart(2, "0");
+    return `${d.getFullYear()}/${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  }
+
+  async function renderHistory() {
+    historyListEl.textContent = "";
+    const loading = document.createElement("li");
+    loading.className = "h-empty";
+    loading.textContent = "読み込み中…";
+    historyListEl.appendChild(loading);
+
+    let items = [];
+    let failed = false;
+    try {
+      if (serverUrl()) {
+        const res = await fetch(serverUrl() + "/history");
+        const data = await res.json();
+        if (Array.isArray(data.items)) items = data.items;
+      } else {
+        failed = true;
+      }
+    } catch (e) { failed = true; }
+
+    historyListEl.textContent = "";
+    if (!items.length) {
+      const li = document.createElement("li");
+      li.className = "h-empty";
+      li.textContent = failed ? "履歴を取得できませんでした（配達サーバー未設定またはオフライン）。"
+                              : "まだ通知はありません。";
+      historyListEl.appendChild(li);
+      return;
+    }
+    items.forEach(it => {
+      const li = document.createElement("li");
+      const t = it.title || "";
+      if (t.includes("在庫切れ")) li.className = "out";
+      else if (t.includes("不足") || t.includes("補充")) li.className = "low";
+      const time = document.createElement("div"); time.className = "h-time"; time.textContent = fmtHistTime(it.t);
+      const title = document.createElement("div"); title.className = "h-title"; title.textContent = t;
+      li.appendChild(time); li.appendChild(title);
+      if (it.body) { const body = document.createElement("div"); body.className = "h-body"; body.textContent = it.body; li.appendChild(body); }
+      historyListEl.appendChild(li);
     });
+  }
+
+  function openHistory() { historyOverlay.classList.add("show"); renderHistory(); }
+  function closeHistory() { historyOverlay.classList.remove("show"); }
+  historyBtn.addEventListener("click", openHistory);
+  document.getElementById("history-x").addEventListener("click", closeHistory);
+  document.getElementById("history-close").addEventListener("click", closeHistory);
+  historyOverlay.addEventListener("click", e => { if (e.target === historyOverlay) closeHistory(); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && historyOverlay.classList.contains("show")) closeHistory(); });
+  document.getElementById("history-clear").addEventListener("click", async () => {
+    if (!serverUrl()) { notify("配達サーバーが未設定です"); return; }
+    try { await fetch(serverUrl() + "/history/clear", { method: "POST" }); } catch (e) {}
+    renderHistory();
+    notify("通知履歴を消去しました");
   });
 
   let sortMode = "name";
