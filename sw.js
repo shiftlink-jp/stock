@@ -1,7 +1,7 @@
 // 在庫管理アプリの Service Worker
 // アプリの読み込みを高速化し、オフラインでも起動できるようにする。
 // ※ ntfy への通知配信やフォント取得(別オリジン)はキャッシュせず、常にネットワークへ。
-const CACHE = "oheart-stock-v2";
+const CACHE = "oheart-stock-v3";
 const ASSETS = [
   "./",
   "./index.html",
