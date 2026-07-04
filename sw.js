@@ -1,7 +1,7 @@
 // 在庫管理アプリの Service Worker
 // アプリの読み込みを高速化し、オフラインでも起動できるようにする。
 // ※ ntfy への通知配信やフォント取得(別オリジン)はキャッシュせず、常にネットワークへ。
-const CACHE = "oheart-stock-v1";
+const CACHE = "oheart-stock-v2";
 const ASSETS = [
   "./",
   "./index.html",
@@ -28,11 +28,38 @@ self.addEventListener("activate", event => {
   })());
 });
 
+// ===== Web Push: 通知を受信して表示する =====
+self.addEventListener("push", event => {
+  let data = { title: "在庫通知", body: "" };
+  try { if (event.data) data = event.data.json(); }
+  catch (e) { if (event.data) data = { title: "在庫通知", body: event.data.text() }; }
+  event.waitUntil(self.registration.showNotification(data.title || "在庫通知", {
+    body: data.body || "",
+    icon: "./icon-192.png",
+    badge: "./icon-192.png",
+    tag: "oheart-stock",
+    renotify: true,
+    data: data,
+  }));
+});
+
+// 通知をタップしたらアプリを前面に出す(なければ開く)
+self.addEventListener("notificationclick", event => {
+  event.notification.close();
+  event.waitUntil((async () => {
+    const all = await clients.matchAll({ type: "window", includeUncontrolled: true });
+    for (const c of all) {
+      if (c.url.includes("/stock") && "focus" in c) return c.focus();
+    }
+    if (clients.openWindow) return clients.openWindow("./");
+  })());
+});
+
 self.addEventListener("fetch", event => {
   const req = event.request;
   if (req.method !== "GET") return;
   const url = new URL(req.url);
-  // 別オリジン(ntfy.sh / fonts.googleapis.com など)はそのままネットワークへ
+  // 別オリジン(配達サーバー / fonts.googleapis.com など)はそのままネットワークへ
   if (url.origin !== location.origin) return;
   event.respondWith((async () => {
     const cached = await caches.match(req);

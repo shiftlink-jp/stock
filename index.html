@@ -465,21 +465,20 @@
     </div>
 
     <div class="notif-body">
-      <div class="notif-sec">📡 スマホ・PCへの配信</div>
+      <div class="notif-sec">📡 スマホ・PCへの配信 (Web Push)</div>
       <div class="notif-block">
-        <p class="notif-help">スタッフの端末に無料アプリ「ntfy」を入れて、下の<b>配信チャンネル名</b>を購読すると、在庫切れ・補充依頼のプッシュ通知が届きます。サーバー不要で複数端末に配信できます。（<a href="https://ntfy.sh/" target="_blank" rel="noopener">ntfyについて</a>）</p>
-        <label class="notif-field-label" for="notif-topic">配信チャンネル名（推測されにくい名前にしてください）</label>
+        <p class="notif-help">この端末で「通知を受け取る」と、在庫切れ・補充依頼が<b>アプリに直接プッシュ通知</b>で届きます（追加アプリ不要）。スタッフの各端末でも同じ操作をすれば、その端末にも届きます。<br>※ この機能は公開版（GitHub PagesのHTTPS URL）で使えます。</p>
+        <label class="notif-field-label" for="push-server">配達サーバーURL（Cloudflareで発行したもの）</label>
         <div class="notif-add">
-          <input id="notif-topic" placeholder="例: oheart-stock-x9k2" aria-label="配信チャンネル名" autocomplete="off">
-          <button id="notif-topic-save">保存</button>
+          <input id="push-server" placeholder="https://〇〇〇.workers.dev" aria-label="配達サーバーURL" autocomplete="off">
+          <button id="push-server-save">保存</button>
         </div>
-        <div id="notif-sub" class="notif-sub"></div>
-        <label class="notif-relay-line"><input type="checkbox" id="notif-relay"> スマホ/PCへの配信を有効にする</label>
+        <button id="push-subscribe" class="addbtn" style="margin-top:8px">この端末で通知を受け取る</button>
         <div class="notif-btnrow">
-          <button id="notif-test" class="notif-ghost">🔔 テスト通知を送信</button>
-          <button id="notif-copy" class="notif-ghost">🔗 購読リンクをコピー</button>
+          <button id="push-test" class="notif-ghost">🔔 テスト通知を送信</button>
+          <button id="push-unsub" class="notif-ghost">この端末の通知を停止</button>
         </div>
-        <div id="notif-relay-status" class="notif-status" style="margin-top:10px"></div>
+        <div id="push-status" class="notif-status" style="margin-top:10px"></div>
       </div>
 
       <div class="notif-sec">💻 この端末のブラウザ通知</div>
@@ -494,7 +493,7 @@
         <input id="notif-name" placeholder="端末名(例: レジ前タブレット)" aria-label="端末名">
         <button id="notif-register">＋ この端末を登録</button>
       </div>
-      <p class="notif-note">「登録端末」は配信先を把握するためのメモです。実際の通知は、上の配信チャンネルを購読している端末すべてに届きます。</p>
+      <p class="notif-note">「登録端末」は配信先を把握するためのメモです。実際の通知は、上で「通知を受け取る」を設定した端末すべてにWeb Pushで届きます。</p>
     </div>
 
     <div class="cal-foot"><button class="cal-close" id="notif-close">閉じる</button></div>
@@ -1119,7 +1118,7 @@
     save();
     const unitName = p.unit === "case" ? "ケース" : "個";
     notify(`管理者に「${p.name}」の在庫不足(残り ${p.stock}${unitName})を通知しました。補充を依頼します。`);
-    pushNotify("在庫不足の補充依頼", `「${p.name}」が在庫不足です(残り ${p.stock}${unitName})。補充してください。`, { priority: 4, tags: ["warning", "package"] });
+    pushNotify("在庫不足の補充依頼", `「${p.name}」が在庫不足です(残り ${p.stock}${unitName})。補充してください。`);
   }
 
   // ===== 入荷日カレンダー =====
@@ -1217,22 +1216,18 @@
     save();
     const unitInfo = p.unit === "case" ? `ケース管理・1ケース${p.caseSize}個入り` : "個数管理";
     notify(`管理者に「${p.name}」の在庫切れを通知しました(${unitInfo})`);
-    pushNotify("在庫切れのお知らせ", `「${p.name}」が在庫切れになりました(${unitInfo})。`, { priority: 5, tags: ["rotating_light", "package"] });
+    pushNotify("在庫切れのお知らせ", `「${p.name}」が在庫切れになりました(${unitInfo})。`);
   }
 
   // ===== 通知(ブラウザ通知 + 端末登録) =====
   const NOTIF_KEY = "shop-inventory-notif";
-  const NTFY_BASE = "https://ntfy.sh";
-  let notifData = { devices: [], topic: "", relay: true };
+  // VAPID公開鍵(公開して問題なし)。対になる秘密鍵はCloudflare側にのみ保管する。
+  const VAPID_PUBLIC = "BBhb6849zHyNoIR5iKlZhTW6a_Z24Ny-2T3JIWTjqxASxt68EeQlmJyC6ru5IIr9-tvsujAoCf2NJzcKHti3maQ";
+  let notifData = { devices: [], server: "https://oheart-stock.oheart.workers.dev" };
   try {
     const s = JSON.parse(localStorage.getItem(NOTIF_KEY));
     if (s && Array.isArray(s.devices)) notifData = Object.assign(notifData, s);
   } catch (e) {}
-  // 配信チャンネル名が未設定なら、推測されにくいランダム名を初期生成する
-  if (!notifData.topic) {
-    notifData.topic = "oheart-stock-" + Math.random().toString(36).slice(2, 8);
-  }
-  if (typeof notifData.relay !== "boolean") notifData.relay = true;
 
   function saveNotif() {
     try { localStorage.setItem(NOTIF_KEY, JSON.stringify(notifData)); } catch (e) {}
@@ -1241,27 +1236,29 @@
   const notifSupported = typeof Notification !== "undefined";
 
   // 在庫切れ・在庫不足の通知を送る。
-  // 1) この端末のブラウザ通知  2) ntfy 経由で購読中の全端末(スマホ/PC)へプッシュ配信
-  function pushNotify(title, body, opts) {
-    opts = opts || {};
+  // 1) この端末のブラウザ通知  2) 配達サーバー経由で購読中の全端末(スマホ/PC)へWeb Push配信
+  function pushNotify(title, body) {
     if (notifSupported && Notification.permission === "granted") {
       try { new Notification(title, { body }); } catch (e) {}
     }
-    if (notifData.relay && notifData.topic) {
-      // Content-Type を付けない文字列 body にすることで CORS プリフライトを避ける
+    if (notifData.server) {
       try {
-        fetch(NTFY_BASE, {
+        fetch(notifData.server.replace(/\/$/, "") + "/notify", {
           method: "POST",
-          body: JSON.stringify({
-            topic: notifData.topic,
-            title: title,
-            message: body,
-            priority: opts.priority || 4,
-            tags: opts.tags || ["package"],
-          }),
+          body: JSON.stringify({ title, body: body || "" }),
         }).catch(() => {});
       } catch (e) { /* オフライン等は無視 */ }
     }
+  }
+
+  // base64url(VAPID公開鍵) を Uint8Array へ変換(購読時に使用)
+  function urlB64ToUint8(base64) {
+    const pad = "=".repeat((4 - base64.length % 4) % 4);
+    const b = (base64 + pad).replace(/-/g, "+").replace(/_/g, "/");
+    const raw = atob(b);
+    const arr = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+    return arr;
   }
 
   const notifOverlay = document.getElementById("notif-overlay");
@@ -1271,68 +1268,91 @@
   const notifPerm = document.getElementById("notif-perm");
   const notifListEl = document.getElementById("notif-list");
   const notifName = document.getElementById("notif-name");
-  const notifTopic = document.getElementById("notif-topic");
-  const notifTopicSave = document.getElementById("notif-topic-save");
-  const notifSub = document.getElementById("notif-sub");
-  const notifRelay = document.getElementById("notif-relay");
-  const notifTest = document.getElementById("notif-test");
-  const notifCopy = document.getElementById("notif-copy");
-  const notifRelayStatus = document.getElementById("notif-relay-status");
+  const pushServerInput = document.getElementById("push-server");
+  const pushServerSave = document.getElementById("push-server-save");
+  const pushSubscribeBtn = document.getElementById("push-subscribe");
+  const pushTestBtn = document.getElementById("push-test");
+  const pushUnsubBtn = document.getElementById("push-unsub");
+  const pushStatusEl = document.getElementById("push-status");
 
-  function subUrl() { return notifData.topic ? `${NTFY_BASE}/${notifData.topic}` : ""; }
+  function serverUrl() { return (notifData.server || "").replace(/\/$/, ""); }
 
-  // 配信チャンネルの購読リンクと状態を表示する
-  function renderRelay() {
-    notifTopic.value = notifData.topic;
-    notifRelay.checked = !!notifData.relay;
-    if (notifData.topic) {
-      const u = subUrl();
-      notifSub.innerHTML = `購読リンク: <a href="${u}" target="_blank" rel="noopener">${u.replace(/^https:\/\//, "")}</a>`;
-    } else {
-      notifSub.textContent = "配信チャンネル名を設定してください。";
-    }
-    let cls, msg;
-    if (!notifData.topic) { cls = "no"; msg = "配信チャンネルが未設定です。"; }
-    else if (!notifData.relay) { cls = "no"; msg = "配信は停止中です。有効にすると購読端末へ届きます。"; }
-    else { cls = "ok"; msg = "配信ON。このチャンネルを購読中のスマホ/PCすべてに届きます。"; }
-    notifRelayStatus.className = "notif-status " + cls;
-    notifRelayStatus.textContent = msg;
-  }
-
-  function saveTopic() {
-    // ntfyのチャンネル名に使える文字だけ残す
-    const v = notifTopic.value.trim().replace(/[^a-zA-Z0-9_-]/g, "");
-    if (!v) { notify("配信チャンネル名を入力してください"); notifTopic.value = notifData.topic; return; }
-    notifData.topic = v;
-    saveNotif();
-    renderRelay();
-    notify("配信チャンネルを保存しました");
-  }
-  notifTopicSave.addEventListener("click", saveTopic);
-  notifTopic.addEventListener("keydown", e => { if (e.key === "Enter") saveTopic(); });
-
-  notifRelay.addEventListener("change", () => {
-    notifData.relay = notifRelay.checked;
-    saveNotif();
-    renderRelay();
-  });
-
-  notifTest.addEventListener("click", () => {
-    if (!notifData.topic) { notify("先に配信チャンネル名を設定してください"); return; }
-    pushNotify("テスト通知", "在庫通知のテストです。この通知が届いていれば設定は完了です。", { priority: 3, tags: ["bell"] });
-    notify("テスト通知を送信しました");
-  });
-
-  notifCopy.addEventListener("click", async () => {
-    const u = subUrl();
-    if (!u) { notify("先に配信チャンネル名を設定してください"); return; }
+  // 配達サーバーの設定状況とこの端末の購読状態を表示する
+  async function renderPush() {
+    pushServerInput.value = notifData.server || "";
+    let subscribed = false;
     try {
-      await navigator.clipboard.writeText(u);
-      notify("購読リンクをコピーしました");
+      if ("serviceWorker" in navigator && "PushManager" in window) {
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (reg) { const s = await reg.pushManager.getSubscription(); subscribed = !!s; }
+      }
+    } catch (e) {}
+    let cls, msg;
+    if (location.protocol !== "https:") { cls = "no"; msg = "通知は公開版(GitHub PagesのHTTPS)で使えます。今はローカル表示中です。"; }
+    else if (!("PushManager" in window)) { cls = "block"; msg = "この端末/ブラウザはWeb Push非対応です。"; }
+    else if (!notifData.server) { cls = "no"; msg = "配達サーバーURLを設定してください(Cloudflareで発行)。"; }
+    else if (subscribed) { cls = "ok"; msg = "この端末は通知を受け取れます。"; }
+    else { cls = "no"; msg = "「この端末で通知を受け取る」を押してください。"; }
+    pushStatusEl.className = "notif-status " + cls;
+    pushStatusEl.textContent = msg;
+    pushSubscribeBtn.textContent = subscribed ? "通知は有効です(再登録)" : "この端末で通知を受け取る";
+  }
+
+  function savePushServer() {
+    const v = pushServerInput.value.trim();
+    if (v && !/^https:\/\//.test(v)) { notify("https:// で始まるURLを入力してください"); return; }
+    notifData.server = v.replace(/\/$/, "");
+    saveNotif();
+    renderPush();
+    notify("配達サーバーを保存しました");
+  }
+  pushServerSave.addEventListener("click", savePushServer);
+  pushServerInput.addEventListener("keydown", e => { if (e.key === "Enter") savePushServer(); });
+
+  // この端末を通知先として購読登録する
+  async function subscribeThisDevice() {
+    if (location.protocol !== "https:") { notify("通知は公開版(HTTPS)でのみ使えます"); return; }
+    if (!notifData.server) { notify("先に配達サーバーURLを設定してください"); return; }
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) { notify("この端末はWeb Push非対応です"); return; }
+    try {
+      const perm = await Notification.requestPermission();
+      if (perm !== "granted") { notify("通知が許可されませんでした"); renderPush(); return; }
+      const reg = await navigator.serviceWorker.ready;
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToUint8(VAPID_PUBLIC) });
+      }
+      const name = (notifName && notifName.value.trim()) || ("端末" + (notifData.devices.length + 1));
+      const res = await fetch(serverUrl() + "/subscribe", { method: "POST", body: JSON.stringify({ subscription: sub, name }) });
+      if (!res.ok) throw new Error("サーバー応答 " + res.status);
+      notify("この端末を通知先に登録しました");
+      renderPush();
     } catch (e) {
-      notifTopic.value = u; notifTopic.select();
-      notify("コピーできない環境です。リンクを手動でコピーしてください");
+      notify("登録に失敗しました: " + (e && e.message || e));
+      renderPush();
     }
+  }
+  pushSubscribeBtn.addEventListener("click", subscribeThisDevice);
+
+  pushTestBtn.addEventListener("click", () => {
+    if (!notifData.server) { notify("先に配達サーバーURLを設定してください"); return; }
+    fetch(serverUrl() + "/notify", { method: "POST", body: JSON.stringify({ title: "テスト通知", body: "在庫通知のテストです。届いていれば設定完了です。" }) })
+      .then(r => r.json())
+      .then(d => notify(`テスト通知を送信しました(${d.sent || 0}台へ)`))
+      .catch(() => notify("送信に失敗しました。URLを確認してください"));
+  });
+
+  pushUnsubBtn.addEventListener("click", async () => {
+    try {
+      const reg = await navigator.serviceWorker.getRegistration();
+      const sub = reg && await reg.pushManager.getSubscription();
+      if (sub) {
+        if (notifData.server) fetch(serverUrl() + "/unsubscribe", { method: "POST", body: JSON.stringify({ endpoint: sub.endpoint }) }).catch(() => {});
+        await sub.unsubscribe();
+      }
+      notify("この端末の通知を停止しました");
+      renderPush();
+    } catch (e) { notify("停止に失敗しました"); }
   });
 
   function updateNotifCount() {
@@ -1340,7 +1360,7 @@
   }
 
   function renderNotifPanel() {
-    renderRelay();
+    renderPush();
     let cls = "no", msg = "この端末では通知が許可されていません。";
     if (!notifSupported) { cls = "block"; msg = "この環境ではブラウザ通知が利用できません(公開後の端末では利用可能です)。"; }
     else if (Notification.permission === "granted") { cls = "ok"; msg = "この端末は通知が許可されています。"; }
