@@ -1,7 +1,7 @@
 // 在庫管理アプリの Service Worker
 // アプリの読み込みを高速化し、オフラインでも起動できるようにする。
 // ※ ntfy への通知配信やフォント取得(別オリジン)はキャッシュせず、常にネットワークへ。
-const CACHE = "oheart-stock-v5";
+const CACHE = "oheart-stock-v6";
 const ASSETS = [
   "./",
   "./index.html",
@@ -61,6 +61,25 @@ self.addEventListener("fetch", event => {
   const url = new URL(req.url);
   // 別オリジン(配達サーバー / fonts.googleapis.com など)はそのままネットワークへ
   if (url.origin !== location.origin) return;
+
+  // アプリ本体(HTML)はネットワーク優先 = 常に最新を表示。オフライン時のみキャッシュ。
+  const isDoc = req.mode === "navigate" || req.destination === "document"
+    || url.pathname.endsWith("/") || url.pathname.endsWith(".html");
+  if (isDoc) {
+    event.respondWith((async () => {
+      try {
+        const res = await fetch(req);
+        const copy = res.clone();
+        caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {});
+        return res;
+      } catch (e) {
+        return (await caches.match(req)) || (await caches.match("./index.html")) || Response.error();
+      }
+    })());
+    return;
+  }
+
+  // その他(アイコン等)はキャッシュ優先 = 高速表示
   event.respondWith((async () => {
     const cached = await caches.match(req);
     if (cached) return cached;
@@ -70,10 +89,7 @@ self.addEventListener("fetch", event => {
       caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {});
       return res;
     } catch (e) {
-      // オフライン時はアプリ本体を返す
-      const fallback = await caches.match("./index.html");
-      if (fallback) return fallback;
-      throw e;
+      return (await caches.match("./index.html")) || Response.error();
     }
   })());
 });
