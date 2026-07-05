@@ -641,6 +641,7 @@
   function save() {
     store[current] = { products, seq };
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(store)); } catch (e) {}
+    schedulePush();
   }
 
   loadWorkspace(current);
@@ -1389,6 +1390,8 @@
     saveNotif();
     renderPush();
     notify("配達サーバーを保存しました");
+    syncVersion = 0;
+    pullState(true);   // 新しいサーバーの最新在庫へ即同期
   }
   pushServerSave.addEventListener("click", savePushServer);
   pushServerInput.addEventListener("keydown", e => { if (e.key === "Enter") savePushServer(); });
@@ -1527,6 +1530,114 @@
   notifName.addEventListener("keydown", e => { if (e.key === "Enter") registerThisDevice(); });
 
   updateNotifCount();
+
+  // ==========================================================================
+  //  全端末リアルタイム同期
+  //  どれか1台で在庫を変えると、配達サーバー(Cloudflare KV)を介して
+  //  他の全端末へ自動反映される。手動リロード不要。
+  //  仕組み: 変更のたびにサーバーへ保存(版数+1)。各端末は数秒ごとに版数だけを
+  //         確認し、上がっていたら本体を取り込んで再描画する。
+  // ==========================================================================
+  let syncVersion = 0;      // この端末が最後に取り込んだ/送信したサーバー版数
+  let pushTimer = null;     // 送信のデバウンス用
+  let pushInFlight = false; // 送信中は再送を抑制
+  let pushPending = false;  // 送信中に追加変更があった場合の再送フラグ
+
+  const syncFlash = document.createElement("span");
+  syncFlash.textContent = "🔄 更新を反映しました";
+  syncFlash.style.cssText = "position:fixed;left:50%;top:14px;transform:translate(-50%,-14px);"
+    + "background:var(--accent);color:#fff;font-size:12px;font-weight:600;padding:6px 14px;"
+    + "border-radius:999px;box-shadow:0 8px 24px rgba(42,93,168,.32);opacity:0;pointer-events:none;"
+    + "transition:opacity .25s,transform .25s;z-index:60;";
+  document.body.appendChild(syncFlash);
+  let syncFlashTimer;
+  function showSyncFlash() {
+    syncFlash.style.opacity = "1";
+    syncFlash.style.transform = "translate(-50%,0)";
+    clearTimeout(syncFlashTimer);
+    syncFlashTimer = setTimeout(() => {
+      syncFlash.style.opacity = "0";
+      syncFlash.style.transform = "translate(-50%,-14px)";
+    }, 1600);
+  }
+
+  // 編集中(入力欄にフォーカス/カレンダーを開いている)は取り込みを保留し、
+  // 作業を邪魔しない。編集が終わった次のポーリングで反映される。
+  function syncBusyEditing() {
+    const a = document.activeElement;
+    if (a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA")) return true;
+    if (overlay.classList.contains("show")) return true;      // 入荷日カレンダー
+    return false;
+  }
+
+  // 変更をサーバーへ送信(0.6秒デバウンス)
+  function schedulePush() {
+    if (!serverUrl()) return;
+    clearTimeout(pushTimer);
+    pushTimer = setTimeout(pushState, 600);
+  }
+  async function pushState() {
+    if (!serverUrl()) return;
+    if (pushInFlight) { pushPending = true; return; }
+    pushInFlight = true;
+    try {
+      const res = await fetch(serverUrl() + "/state", {
+        method: "POST",
+        body: JSON.stringify({ state: store }),
+      });
+      const d = await res.json();
+      if (d && d.version) syncVersion = d.version;   // 自分の送信では取り込み不要
+    } catch (e) { /* オフライン等は次回に */ }
+    pushInFlight = false;
+    if (pushPending) { pushPending = false; schedulePush(); }
+  }
+
+  // サーバーの在庫データをこの端末へ取り込む
+  function applyRemoteState(remote, version) {
+    let changed = false;
+    ["item", "material"].forEach(k => {
+      if (remote[k] && Array.isArray(remote[k].products)) {
+        store[k] = { products: migrate(remote[k].products), seq: remote[k].seq || 0 };
+        changed = true;
+      }
+    });
+    syncVersion = version;
+    if (!changed) return;
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(store)); } catch (e) {}
+    // 表示中のワークスペースを配列ごと最新に差し替える
+    if (store[current]) {
+      products = store[current].products;
+      seq = store[current].seq;
+    }
+    renderList();
+    showSyncFlash();
+  }
+
+  // 版数を確認し、上がっていれば本体を取り込む。force時は編集中でも取り込む。
+  async function pullState(force) {
+    if (!serverUrl()) return;
+    try {
+      const meta = await (await fetch(serverUrl() + "/state/meta")).json();
+      const ver = meta.version || 0;
+      if (ver <= syncVersion) return;                 // 変化なし
+      if (syncBusyEditing() && !force) return;         // 編集終わりを待つ
+      const data = await (await fetch(serverUrl() + "/state")).json();
+      if (data && data.state && data.version > syncVersion) {
+        applyRemoteState(data.state, data.version);
+      } else if (data && data.version) {
+        syncVersion = Math.max(syncVersion, data.version);
+      }
+    } catch (e) { /* オフライン等は無視 */ }
+  }
+
+  // 起動直後にサーバーの最新状態へ合わせる(初期データより優先)
+  pullState(true);
+  // 数秒ごとに自動チェック
+  setInterval(() => pullState(false), 3000);
+  // タブに戻った/ウィンドウがアクティブになった瞬間に即同期
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) pullState(false); });
+  window.addEventListener("focus", () => pullState(false));
+  window.addEventListener("online", () => pullState(false));
 </script>
 
 <script>
