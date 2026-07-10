@@ -84,7 +84,7 @@
 
   /* ===== 表示切替(モバイル) ===== */
   .viewtoggle{
-    display:none; gap:4px; padding:4px; margin-bottom:18px;
+    display:none; gap:4px; padding:4px;
     background:var(--surface); border:1px solid var(--line); border-radius:var(--r-md);
   }
   .viewtoggle button{
@@ -95,9 +95,27 @@
   .viewtoggle button[aria-selected="true"]{background:var(--accent); color:var(--accent-ink);}
   .viewtoggle button:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
   @media(max-width:899px){
-    body[data-ws="item"] .viewtoggle{display:flex;}
+    body[data-ws="item"] .viewtoggle{display:flex; width:100%;}
     body[data-ws="item"][data-view="case"] #sec-piece{display:none;}
     body[data-ws="item"][data-view="piece"] #sec-case{display:none;}
+    .tabsrow{flex-direction:column; align-items:stretch;}
+    .search-wrap{width:100%;}
+    .pagetabs{width:100%;}
+    .pagetabs button{flex:1;}
+  }
+
+  /* ===== 列数切替 ===== */
+  .colbtn{
+    display:none; align-items:center; justify-content:center; flex:0 0 auto;
+    width:30px; height:30px; margin-left:auto; padding:0;
+    border-radius:var(--r-pill); border:1px solid var(--accent);
+    background:var(--accent); color:#fff; cursor:pointer;
+  }
+  .colbtn[aria-pressed="false"]{background:var(--surface); color:var(--ink-sub); border-color:var(--line);}
+  .colbtn:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+  @media(max-width:899px){
+    body[data-ws="item"] .colbtn{display:inline-flex;}
+    body[data-ws="item"][data-cols="1"] ul.itemlist{grid-template-columns:1fr;}
   }
 
   /* ===== 並び替え ===== */
@@ -439,10 +457,6 @@
   @media(max-width:640px){
     .wrap{padding:20px 16px 56px;}
     h1{font-size:20px;}
-    .tabsrow{flex-direction:column; align-items:stretch;}
-    .search-wrap{width:100%;}
-    .pagetabs{width:100%;}
-    .pagetabs button{flex:1;}
     .mrow{flex-wrap:wrap; gap:12px; padding:16px;}
     .mrow .thumb-wrap{width:64px; height:64px;}
     .mrow .thumb-wrap .emoji{font-size:28px;}
@@ -473,15 +487,14 @@
       <button data-ws="item" role="tab" aria-selected="true">🛒 商品</button>
       <button data-ws="material" role="tab" aria-selected="false">📦 資材</button>
     </div>
+    <div class="viewtoggle" role="tablist" aria-label="表示単位の切り替え">
+      <button data-view="case" role="tab" aria-selected="true">📦 ケース単位</button>
+      <button data-view="piece" role="tab" aria-selected="false">🔢 個数管理</button>
+    </div>
     <div class="search-wrap">
       <span class="search-ico" aria-hidden="true">🔍</span>
       <input id="search" type="search" placeholder="商品名で検索" aria-label="名前で検索" autocomplete="off">
     </div>
-  </div>
-
-  <div class="viewtoggle" role="tablist" aria-label="表示単位の切り替え">
-    <button data-view="case" role="tab" aria-selected="true">📦 ケース単位</button>
-    <button data-view="piece" role="tab" aria-selected="false">🔢 個数管理</button>
   </div>
 
   <div class="sortbar" role="group" aria-label="並び替え">
@@ -489,6 +502,9 @@
     <button data-sort="name" aria-pressed="true">商品名順</button>
     <button data-sort="stock-desc" aria-pressed="false">在庫が多い順</button>
     <button data-sort="stock-asc" aria-pressed="false">在庫が少ない順</button>
+    <button id="col-toggle" class="colbtn" aria-pressed="true" title="2列表示に切り替え" aria-label="2列表示に切り替え">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+    </button>
   </div>
 
   <div class="grid">
@@ -729,6 +745,18 @@
     document.body.dataset.view = btn.dataset.view;
     viewToggleBtns.forEach(b => b.setAttribute("aria-selected", String(b === btn)));
   }));
+
+  const colToggle = document.getElementById("col-toggle");
+  let cols = "2";
+  try { cols = localStorage.getItem("stock-cols") || "2"; } catch (e) {}
+  document.body.dataset.cols = cols;
+  colToggle.setAttribute("aria-pressed", String(cols === "2"));
+  colToggle.addEventListener("click", () => {
+    cols = cols === "2" ? "1" : "2";
+    document.body.dataset.cols = cols;
+    colToggle.setAttribute("aria-pressed", String(cols === "2"));
+    try { localStorage.setItem("stock-cols", cols); } catch (e) {}
+  });
 
   // ===== 通知履歴（配達サーバーに記録された全端末共通の履歴を表示）=====
   const historyOverlay = document.getElementById("history-overlay");
