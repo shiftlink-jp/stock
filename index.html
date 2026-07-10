@@ -747,15 +747,15 @@
   }));
 
   const colToggle = document.getElementById("col-toggle");
-  let cols = "2";
-  try { cols = localStorage.getItem("stock-cols") || "2"; } catch (e) {}
-  document.body.dataset.cols = cols;
-  colToggle.setAttribute("aria-pressed", String(cols === "2"));
+  let colMode = "2";
+  try { colMode = localStorage.getItem("stock-cols") || "2"; } catch (e) {}
+  document.body.dataset.cols = colMode;
+  colToggle.setAttribute("aria-pressed", String(colMode === "2"));
   colToggle.addEventListener("click", () => {
-    cols = cols === "2" ? "1" : "2";
-    document.body.dataset.cols = cols;
-    colToggle.setAttribute("aria-pressed", String(cols === "2"));
-    try { localStorage.setItem("stock-cols", cols); } catch (e) {}
+    colMode = colMode === "2" ? "1" : "2";
+    document.body.dataset.cols = colMode;
+    colToggle.setAttribute("aria-pressed", String(colMode === "2"));
+    try { localStorage.setItem("stock-cols", colMode); } catch (e) {}
   });
 
   // ===== 通知履歴（配達サーバーに記録された全端末共通の履歴を表示）=====
