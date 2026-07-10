@@ -140,8 +140,8 @@
   }
 
   ul.itemlist{
-    list-style:none; margin:0; padding:16px;
-    display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:16px;
+    list-style:none; margin:0; padding:12px;
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px;
   }
   body[data-ws="material"] ul.itemlist{display:block; padding:0;}
   /* PC(商品モード): 各セクションを3列固定で表示 */
@@ -163,30 +163,38 @@
 
   /* ===== 商品カード(コンパクト) ===== */
   li.pcard{
-    display:flex; flex-direction:column; gap:10px; list-style:none;
-    background:var(--surface); border:1px solid var(--line); border-radius:var(--r-md); padding:14px;
+    display:flex; flex-direction:column; gap:8px; list-style:none;
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--r-md); padding:12px;
     transition:background .15s,border-color .15s;
   }
-  .pcard .top{display:flex; align-items:center; gap:10px; min-width:0;}
-  .pcard .thumb-wrap{width:48px; height:48px;}
-  .pcard .thumb-wrap .emoji{font-size:22px;}
+  .pcard .top{display:flex; align-items:center; gap:8px; min-width:0;}
+  .pcard .thumb-wrap{width:40px; height:40px; border-radius:var(--r-sm);}
+  .pcard .thumb-wrap .emoji{font-size:20px;}
   .pcard .namecol{display:flex; flex-direction:column; gap:3px; min-width:0;}
   .pcard .name-b{font-size:14px; font-weight:600; cursor:pointer; overflow-wrap:anywhere;}
   .pcard .name-b:hover{color:var(--accent);}
+  .pcard .unit-badge{font-size:9px; padding:2px 6px;}
+  .pcard .restock,.pcard .thresh{display:block;}
   .pcard .mid{display:flex; flex-direction:column; gap:8px;}
-  .pcard .stepper{display:inline-flex; align-items:center; gap:6px;}
+  .pcard .stepper{display:flex; align-items:center; justify-content:center; gap:6px; width:100%;}
+  .pcard .stepper .count{flex:1;}
   .pcard .stepper button{
-    font:inherit; font-size:15px; line-height:1; width:28px; height:28px;
+    font:inherit; font-size:15px; line-height:1; width:28px; height:28px; flex:none;
     border:1px solid var(--line); border-radius:var(--r-sm); background:var(--surface);
-    color:var(--ink); cursor:pointer;
+    color:var(--ink); cursor:pointer; transition:background .15s,color .15s,border-color .15s;
   }
-  .pcard .stepper button:hover{border-color:var(--accent); color:var(--accent);}
+  .pcard .stepper .dec{background:var(--danger-soft); border-color:var(--danger-soft); color:var(--danger);}
+  .pcard .stepper .dec:hover{border-color:var(--danger); color:var(--danger);}
+  .pcard .stepper .inc{background:var(--accent-soft); border-color:var(--accent-soft); color:var(--accent);}
+  .pcard .stepper .inc:hover{border-color:var(--accent); color:var(--accent);}
   .pcard .count{display:flex; flex-direction:column; align-items:center; line-height:1.15; cursor:pointer; padding:0 4px; border-radius:6px;}
   .pcard .count:hover{box-shadow:inset 0 0 0 1px var(--accent);}
   .pcard .count .big{font-size:14px; font-weight:700;}
   .pcard .count small{font-size:10px; font-weight:400; color:var(--ink-sub);}
-  .pcard .actions{display:flex; align-items:center; gap:8px;}
-  .pcard .lowbtn,.pcard .outbtn{flex:1;}
+  .pcard .statuspill{font-size:11px; padding:3px 10px;}
+  .pcard .actions{display:flex; align-items:center; gap:6px;}
+  .pcard .lowbtn,.pcard .outbtn{flex:1; padding:8px 0;}
+  .pcard .trash{width:30px; height:30px;}
 
   /* ===== 資材の行(ワイド) ===== */
   li.mrow{
